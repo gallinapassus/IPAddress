@@ -4,9 +4,9 @@ import BigInt
 /// Class representing Classless Inter-Domain Routing information
 public class CIDR : Codable {
     /// Valid range for ipv4 bitmask values
-    private static let validV4Range:ClosedRange<Int> = (0...32)
+    internal static let validV4Range:ClosedRange<Int> = (0...32)
     /// Valid range for ipv6 bitmask values
-    private static let validV6Range:ClosedRange<Int> = (0...128)
+    internal static let validV6Range:ClosedRange<Int> = (0...128)
     /// Bitmask size
     public let bits:Int
     /// Ip address type associated to this cidr

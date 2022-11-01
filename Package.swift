@@ -12,17 +12,16 @@ let pkg = Package(
             targets: ["IPAddress"]),
     ],
     dependencies: [
-        /* This dependency will be included later on...
         .package(url: "https://github.com/pointfreeco/swift-parsing.git",
-                 from: "0.10.0"),
-         */
+               revision: "0.10.0"),
         .package(url: "https://github.com/attaswift/BigInt.git",
                  from: "5.3.0")
     ],
     targets: [
         .target(
             name: "IPAddress",
-            dependencies: ["BigInt"]),
+            dependencies: ["BigInt",
+                           .product(name: "Parsing", package: "swift-parsing")]),
         .testTarget(
             name: "IPAddressTests",
             dependencies: ["IPAddress"]),
