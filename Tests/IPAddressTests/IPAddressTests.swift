@@ -6,7 +6,7 @@ final class IPAddressTests: XCTestCase {
     func test_IPAddress_init() {
         // Failable
         // init?(_ bytes:[UInt8])
-        for i in 0...32 {
+        for i in CIDR.validV4Range {
             switch i {
             case 4, 16:
                 XCTAssertNotNil(IPAddress(Array<UInt8>(repeating: 0, count: i)), "\(i)")
@@ -14,6 +14,23 @@ final class IPAddressTests: XCTestCase {
                 XCTAssertNil(IPAddress(Array<UInt8>(repeating: 0, count: i)))
             }
         }
+        // init?(_ string:String)
+        do {
+            let arr:[(String, IPAddress?)] = [
+                ("1.2.3.4/0", IPAddress(1, 2, 3, 4, cidr: 0)!),
+                ("192.168.0.1", IPAddress(192, 168, 0, 1, cidr: 32)!),
+                ("1:2:3:4:5:6:7:8/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 18)),
+                ("1:2:3:4:5:6:7:dead/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 57005, cidr: 18)),
+                ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128)),
+                ("dead:beef:1/128", nil),
+                ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64)),
+            ]
+            for (str,expected) in arr {
+                XCTAssertEqual(IPAddress(str), expected)
+//                print(ip?.debugDescription)
+            }
+        }
+
         // Non-failable
         // ipv4
         // init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32)
@@ -90,89 +107,89 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(1, 2, 3, 4, cidr: 31),
                 IPAddress(1, 2, 3, 4, cidr: 32),
                 ]
-                for (i,expected) in zip(0...32, expectedNetworkAddress) {
-                let v4 = IPAddress(1, 2, 3, 4, cidr: i)
-                    XCTAssertEqual(v4.networkAddress, expected, "\(i): \(v4.networkAddress)")
-                    XCTAssertEqual(v4.networkAddress.debugDescription, expected.debugDescription)
+            for (i,expected) in zip(CIDR.validV4Range, expectedNetworkAddress) {
+                    let v4 = IPAddress(1, 2, 3, 4, cidr: i)
+                XCTAssertEqual(v4?.networkAddress, expected, "\(i): \(String(describing: v4?.networkAddress))")
+                    XCTAssertEqual(v4?.networkAddress.debugDescription, expected!.debugDescription)
             }
         }
         do { // v6
             let expectedNetworkAddress = [
-                IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 0),
-                IPAddress(1, 2, 0, 0, 0, 0, 0, 0, cidr: 32),
-                IPAddress(1, 2, 3, 4, 0, 0, 0, 0, cidr: 64),
-                IPAddress(1, 2, 3, 4, 5, 6, 0, 0, cidr: 96),
-                IPAddress(1, 2, 3, 4, 5, 6, 6, 0, cidr: 111),
-                IPAddress(1, 2, 3, 4, 5, 6, 7, 0, cidr: 112),
-                IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 128),
+                IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 0)!,
+                IPAddress(1, 2, 0, 0, 0, 0, 0, 0, cidr: 32)!,
+                IPAddress(1, 2, 3, 4, 0, 0, 0, 0, cidr: 64)!,
+                IPAddress(1, 2, 3, 4, 5, 6, 0, 0, cidr: 96)!,
+                IPAddress(1, 2, 3, 4, 5, 6, 6, 0, cidr: 111)!,
+                IPAddress(1, 2, 3, 4, 5, 6, 7, 0, cidr: 112)!,
+                IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 128)!,
             ]
             for (i,expected) in zip(0..<expectedNetworkAddress.count, expectedNetworkAddress) {
-                let v6 = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: expected.cidr.bits)
+                let v6 = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: expected.cidr.bits)!
                 XCTAssertEqual(v6.networkAddress, expected, "\(i): \(v6.networkAddress)")
                 XCTAssertEqual(v6.networkAddress.debugDescription, expected.debugDescription)
             }
-            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress,
-                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65))
-            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress,
-                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65))
-            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress.rawAddressBytes,
-                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65).rawAddressBytes)
+            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress,
+                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!)
+            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress,
+                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!)
+            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress.rawAddressBytes,
+                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!.rawAddressBytes)
         }
     }
     func test_routerAddress() {
         do {
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 0).routerAddress, IPAddress(0, 0, 0, 1, cidr: 0))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 22).routerAddress, IPAddress(0, 0, 0, 1, cidr: 22))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 32).routerAddress, nil)
-            XCTAssertEqual(IPAddress(172, 16, 17, 10, cidr: 22).routerAddress, IPAddress(172, 16, 16, 1, cidr: 22))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 22).routerAddress, IPAddress(255, 255, 252, 1, cidr: 22))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 30).routerAddress, IPAddress(255, 255, 255, 253, cidr: 30))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 31).routerAddress, IPAddress(255, 255, 255, 255, cidr: 31))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 32).routerAddress, nil)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 0)!.routerAddress, IPAddress(0, 0, 0, 1, cidr: 0))
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 22)!.routerAddress, IPAddress(0, 0, 0, 1, cidr: 22))
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 32)!.routerAddress, nil)
+            XCTAssertEqual(IPAddress(172, 16, 17, 10, cidr: 22)!.routerAddress, IPAddress(172, 16, 16, 1, cidr: 22))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 22)!.routerAddress, IPAddress(255, 255, 252, 1, cidr: 22))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 30)!.routerAddress, IPAddress(255, 255, 255, 253, cidr: 30))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 31)!.routerAddress, IPAddress(255, 255, 255, 255, cidr: 31))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 32)!.routerAddress, nil)
         }
         do {
-            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 95).routerAddress, IPAddress(1, 2, 3, 4, 5, 6, 0, 1, cidr: 95))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 95).routerAddress, IPAddress(255, 255, 255, 255, 255, 254, 0, 1, cidr: 95))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 128).routerAddress, nil)
-            XCTAssertEqual(IPAddress(65534, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128).routerAddress, nil)
-            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128).routerAddress, nil)
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 127).routerAddress,
+            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 95)!.routerAddress, IPAddress(1, 2, 3, 4, 5, 6, 0, 1, cidr: 95))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 95)!.routerAddress, IPAddress(255, 255, 255, 255, 255, 254, 0, 1, cidr: 95))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 128)!.routerAddress, nil)
+            XCTAssertEqual(IPAddress(65534, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128)!.routerAddress, nil)
+            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128)!.routerAddress, nil)
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 127)!.routerAddress,
                            IPAddress(255, 255, 255, 255, 255, 255, 255, 255, cidr: 127))
-            XCTAssertEqual(IPAddress(65534, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127).routerAddress,
+            XCTAssertEqual(IPAddress(65534, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127)!.routerAddress,
                            IPAddress(65534, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127))
-            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127).routerAddress,
+            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127)!.routerAddress,
                            IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127))
         }
     }
     func test_broadcastAddress() {
         do {
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 0).broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 0))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 22).broadcastAddress, IPAddress(0, 0, 3, 255, cidr: 22))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 32).broadcastAddress, nil)
-            XCTAssertEqual(IPAddress(172, 16, 17, 10, cidr: 22).broadcastAddress, IPAddress(172, 16, 19, 255, cidr: 22))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 22).broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 22))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 30).broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 30))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 31).broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 31))
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 32).broadcastAddress, nil)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 0)!.broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 0))
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 22)!.broadcastAddress, IPAddress(0, 0, 3, 255, cidr: 22))
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, cidr: 32)!.broadcastAddress, nil)
+            XCTAssertEqual(IPAddress(172, 16, 17, 10, cidr: 22)!.broadcastAddress, IPAddress(172, 16, 19, 255, cidr: 22))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 22)!.broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 22))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 30)!.broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 30))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 31)!.broadcastAddress, IPAddress(255, 255, 255, 255, cidr: 31))
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, cidr: 32)!.broadcastAddress, nil)
         }
         do {
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 128).broadcastAddress,
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 128)!.broadcastAddress,
                            nil)
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 127).broadcastAddress,
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 127)!.broadcastAddress,
                            IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 127))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 126).broadcastAddress,
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 126)!.broadcastAddress,
                            IPAddress(0, 0, 0, 0, 0, 0, 0, 3, cidr: 126))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 125).broadcastAddress,
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 125)!.broadcastAddress,
                            IPAddress(0, 0, 0, 0, 0, 0, 0, 7, cidr: 125))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 119).broadcastAddress,
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 119)!.broadcastAddress,
                            IPAddress(0, 0, 0, 0, 0, 0, 0, 511, cidr: 119))
-            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 126).broadcastAddress,
+            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 126)!.broadcastAddress,
                            IPAddress(1, 2, 3, 4, 5, 6, 7, 11, cidr: 126))
-            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 5, cidr: 95).broadcastAddress,
+            XCTAssertEqual(IPAddress(1, 2, 3, 4, 5, 6, 7, 5, cidr: 95)!.broadcastAddress,
                            IPAddress(1, 2, 3, 4, 5, 7, 65535, 65535, cidr: 95))
-            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127).broadcastAddress,
+            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127)!.broadcastAddress,
                            IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 127))
-            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128).broadcastAddress,
+            XCTAssertEqual(IPAddress(65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, cidr: 128)!.broadcastAddress,
                            nil)
         }
     }
@@ -202,7 +219,7 @@ final class IPAddressTests: XCTestCase {
         // TODO: make tests between different ip address types v4.contains(v6) and v6.contains(v4)
         do {
             
-            let v4network = IPAddress(192, 168, 9, 224, cidr: 28)
+            let v4network = IPAddress(192, 168, 9, 224, cidr: 28)!
             let v4host_below = IPAddress(192, 168, 9, 223)
             let v4host_above = IPAddress(192, 168, 9, 240)
             let v4host_inrange:ClosedRange<UInt8> = (224...239)
@@ -211,14 +228,14 @@ final class IPAddressTests: XCTestCase {
             for d in v4host_inrange {
                 let other = IPAddress(192, 168, 9, d)
                 XCTAssertTrue(v4network.contains(other))
-                XCTAssertTrue(IPAddress(0, 0, 0, 0, cidr: 0).contains(other))
-                XCTAssertTrue(IPAddress(255, 255, 255, 255, cidr: 0).contains(other))
-                XCTAssertFalse(IPAddress(255, 255, 255, 255, cidr: 30).contains(other))
-                XCTAssertFalse(IPAddress(255, 255, 255, 255, cidr: 32).contains(other))
+                XCTAssertTrue(IPAddress(0, 0, 0, 0, cidr: 0)!.contains(other))
+                XCTAssertTrue(IPAddress(255, 255, 255, 255, cidr: 0)!.contains(other))
+                XCTAssertFalse(IPAddress(255, 255, 255, 255, cidr: 30)!.contains(other))
+                XCTAssertFalse(IPAddress(255, 255, 255, 255, cidr: 32)!.contains(other))
             }
             XCTAssertFalse(v4network.contains(v4host_above))
             
-            let v4 = IPAddress(172, 16, 16, 0, cidr: 22)
+            let v4 = IPAddress(172, 16, 16, 0, cidr: 22)!
             XCTAssertFalse(v4.contains(IPAddress(172, 16, 15, 255)))
             XCTAssertFalse(v4.contains(IPAddress(172, 16, 20, 0)))
             XCTAssertTrue(v4.contains(IPAddress(172, 16, 16, 0)))
@@ -229,12 +246,12 @@ final class IPAddressTests: XCTestCase {
                     XCTAssertTrue(v4.contains(addr))
                 }
             }
-            XCTAssertFalse(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 21)))
-            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 22)))
-            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 23)))
+            XCTAssertFalse(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 21)!))
+            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 22)!))
+            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 23)!))
         }
         do {
-            let v6network = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 88)
+            let v6network = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 88)!
             let v6host_below = IPAddress(1, 2, 3, 4, 4, 65535, 65535, 65535)
             let v6host_above = IPAddress(1, 2, 3, 4, 5, 256, 0, 0)
             let v6host_inrange = [
@@ -242,10 +259,6 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(1, 2, 3, 4, 5, 6, 7, 9),
                 IPAddress(1, 2, 3, 4, 5, 255, 65535, 65535),
             ]
-//            print("network address  ", v6network.networkAddress.debugDescription)
-//            print("broadcast address", v6network.broadcastAddress!.debugDescription)
-//            print(v6host_below.debugDescription)
-//            print(([v6network, v6host_below] + v6host_inrange).sorted())
             
             XCTAssertFalse(v6network.contains(v6host_below))
             for other in v6host_inrange {
@@ -278,9 +291,9 @@ final class IPAddressTests: XCTestCase {
             XCTAssertTrue(c.contains(b))
             XCTAssertTrue(c.contains(c))
             
-            XCTAssertFalse(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 21)))
-            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 22)))
-            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22).contains(IPAddress(172, 16, 17, 1, cidr: 23)))
+            XCTAssertFalse(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 21)!))
+            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 22)!))
+            XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 23)!))
 
         }
     }
@@ -304,26 +317,28 @@ final class IPAddressTests: XCTestCase {
             print("Initialized \(UInt16.max) ipv6 addresses in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/init")
         }
     }
-    func test_foo() {
-//        do {
-//            let a = IPAddress(1,2,3,4,5,6,7,8, cidr: 95)
-//            let cidrData = a.cidr.bytes
-//            let hostData = a.cidr.bytes.map({ ~$0 })
-//            print(cidrData.withUnsafeBytes({Array($0)}))
-//            print(hostData.withUnsafeBytes({Array($0)}))
-//        }
-//        XCTAssertEqual(_specific_factorial(0, 0), 1)
-//        XCTAssertEqual(_specific_factorial(1, 0), 1)
-//        XCTAssertEqual(_specific_factorial(2, 0), 1)
-//        XCTAssertEqual(_specific_factorial(0, 1), 0)
-//        XCTAssertEqual(_specific_factorial(1, 1), 1)
-//        XCTAssertEqual(_specific_factorial(2, 1), 2)
-//        XCTAssertEqual(_specific_factorial(0, 3), 0)
-//        XCTAssertEqual(_specific_factorial(1, 3), 1)
-//        XCTAssertEqual(_specific_factorial(2, 3), 8)
-//        XCTAssertEqual(_specific_factorial(0, 4), 0)
-//        XCTAssertEqual(_specific_factorial(1, 4), 1)
-//        XCTAssertEqual(_specific_factorial(2, 4), 16)
+    func test_init_from_string_performance() {
+        print("Generating test strings...", terminator: "")
+        var a:[String] = []
+        (UInt32(0)..<UInt32(UInt16.max/32)).forEach({ i in
+            a.append(IPAddress(i).description)
+            a.append(IPAddress(i).debugDescription)
+            a.append(IPAddress(0, 0, 0, 0, 0, 0, 0, UInt16(i)).description)
+            a.append(IPAddress(0, 0, 0, 0, 0, 0, 0, UInt16(i)).debugDescription)
+            a.append("1:2:3::6::ffff/32")
+            a.append("1:2:3::6:ffffx/32") // <= fails intentionally
+            a.append("::1/32")
+            a.append("f00d::1")
+        })
+        print("done")
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for str in a {
+                let _ = IPAddress(str)
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("Initialized \(a.count) ipv4/ipv6 addresses in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(a.count))/1000.0, "µs/init")
+        }
     }
 }
 final class CIDRTests: XCTestCase {

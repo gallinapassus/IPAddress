@@ -1,5 +1,6 @@
 import Foundation
 import BigInt
+import Parsing
 
 /// Conrete type capable of encapsulating ipv4 and ipv6 addresses
 public struct IPAddress : Codable {
@@ -43,43 +44,16 @@ public struct IPAddress : Codable {
     ///
     /// Initializes an ipv4 or ipv6 address from given String.
     public init?(_ string:String) {
-        // NOTE: This is very trivial/limited implementation
-        let v4 = "1234567890."
-        let v6 = "1234567890abcdef:"
-        if string.allSatisfy({ v4.contains($0) }) { // v4
-            let elements = string.split(separator: ".")
-            guard elements.count == 4 else {
-                return nil
+        let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
+        guard let validV4 = parsedV4 else {
+            let parsedV6 = try? Parse { IPv6AddressParser<String>() }.parse(string)
+            guard let validV6 = parsedV6 else {
+                return nil // was not v4 nor v6
             }
-            let arr = elements.compactMap { UInt8($0, radix: 10) }
-            guard arr.count == 4 else {
-                return nil
-            }
-            self.init(arr)
+            self = validV6 // was v6
+            return
         }
-        else if string.allSatisfy({ v6.contains($0) }) { // v6
-            let elements = string.split(separator: ":")
-            guard elements.count == 8 else {
-                return nil
-            }
-            let arr = elements.compactMap { UInt16($0, radix: 16) }
-            guard arr.count == 8 else {
-                return nil
-            }
-
-            let bytes = arr.withUnsafeBufferPointer { buffer -> [UInt8] in
-                var u8arr:[UInt8] = []
-                for i in stride(from: buffer.startIndex, to: buffer.endIndex, by: 1) {
-                    u8arr.append(UInt8(buffer[i] >> 8))
-                    u8arr.append(UInt8(buffer[i] & 0x00ff))
-                }
-                return u8arr
-            }
-            self.init(bytes)
-        }
-        else {
-            return nil
-        }
+        self = validV4 // was v4
     }
 }
 extension IPAddress : Equatable {
@@ -199,7 +173,7 @@ extension IPAddress {
     public var networkAddress:IPAddress {
         let cb = cidr.bytes
         switch type {
-        case .v4: return IPAddress(data[1] & cb[0], data[2] & cb[1], data[3] & cb[2], data[4] & cb[3], cidr: cidr.bits)
+        case .v4: return IPAddress(data[1] & cb[0], data[2] & cb[1], data[3] & cb[2], data[4] & cb[3], cidr: cidr.bits)!
         case .v6:
             let arr:[UInt8] = zip(data[1...], cb).map({ $0 & $1 })
             var addr = IPAddress(arr)!
@@ -283,13 +257,38 @@ extension IPAddress {
         }
     }
     /// Initializes an ipv4 address
-    public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
+    public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8) {
+        let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
+        self.data = Data(u8)
+        self.cidr = CIDR(for: .v4, bits: CIDR.validV4Range.upperBound)
+    }
+    /// Initializes an ipv4 address
+    public init?(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
+        guard CIDR.validV4Range.contains(bits) else {
+            return nil
+        }
         let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
         self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: bits)
     }
     /// Initializes an ipv6 address
-    public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
+    public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
+        self.data = Data([IPAddrType.v6.rawValue])
+        self.cidr = CIDR(for: .v6, bits: CIDR.validV6Range.upperBound)
+        if Self.systemIsLittleEndian {
+            self.data.append(Data([a.byteSwapped, b.byteSwapped, c.byteSwapped,
+                                   d.byteSwapped, e.byteSwapped, f.byteSwapped,
+                                   g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) })))
+        }
+        else {
+            self.data.append(Data([a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) })))
+        }
+    }
+    /// Initializes an ipv6 address
+    public init?(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
+        guard CIDR.validV6Range.contains(bits) else {
+            return nil
+        }
         self.data = Data([IPAddrType.v6.rawValue])
         self.cidr = CIDR(for: .v6, bits: bits)
         if Self.systemIsLittleEndian {
