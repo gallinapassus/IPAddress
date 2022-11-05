@@ -44,16 +44,32 @@ public struct IPAddress : Codable {
     ///
     /// Initializes an ipv4 or ipv6 address from given String.
     public init?(_ string:String) {
-        let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
-        guard let validV4 = parsedV4 else {
+        if string.contains(":") { // Just a small optimization
+            // IPv6 first
             let parsedV6 = try? Parse { IPv6AddressParser<String>() }.parse(string)
             guard let validV6 = parsedV6 else {
-                return nil // was not v4 nor v6
+                let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
+                guard let validV4 = parsedV4 else {
+                    return nil // was not v4 nor v6
+                }
+                self = validV4 // was v4
+                return
             }
             self = validV6 // was v6
-            return
         }
-        self = validV4 // was v4
+        else {
+            // IPv4 first
+            let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
+            guard let validV4 = parsedV4 else {
+                let parsedV6 = try? Parse { IPv6AddressParser<String>() }.parse(string)
+                guard let validV6 = parsedV6 else {
+                    return nil // was not v4 nor v6
+                }
+                self = validV6 // was v6
+                return
+            }
+            self = validV4 // was v4
+        }
     }
 }
 extension IPAddress : Equatable {

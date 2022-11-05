@@ -7,6 +7,7 @@ internal struct IPv4AddressParser<Input:Collection> : Parser {
     @inlinable
     public init() {}
     public func parse(_ input: inout Substring) throws -> Output {
+        guard input.isEmpty == false else { return nil }
         let ipv4elementParser = Many {
             Prefix { $0.isNumber }.map { UInt8($0, radix: 10) }
         } separator: {
@@ -46,6 +47,7 @@ internal struct IPv6AddressParser<Input:Collection> : Parser {
     @inlinable
     public init() {}
     public func parse(_ input: inout Substring) throws -> Output {
+        guard input.isEmpty == false else { return nil }
         let ipv6elementParser = Many {
             Prefix { $0.isNumber || "abcdef".contains($0) }.map { UInt16($0, radix: 16) }
         } separator: {
@@ -59,7 +61,6 @@ internal struct IPv6AddressParser<Input:Collection> : Parser {
             }
             End()
         }.map({ result in
-            
             // Initial (and limited) implementation of ipv6 address parsing
             let (abcdefgh,cidr) = result
             let elements:[UInt16] = abcdefgh.compactMap({ $0 })

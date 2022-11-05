@@ -24,10 +24,13 @@ final class IPAddressTests: XCTestCase {
                 ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128)),
                 ("dead:beef:1/128", nil),
                 ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64)),
+                //("deadbeef::ff/64", nil), // TODO: This should fail => nil
+                ("[8.8.8.8]", nil),
+                ("x", nil),
+                ("", nil),
             ]
             for (str,expected) in arr {
                 XCTAssertEqual(IPAddress(str), expected)
-//                print(ip?.debugDescription)
             }
         }
 
