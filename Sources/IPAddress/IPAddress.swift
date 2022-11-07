@@ -71,6 +71,63 @@ public struct IPAddress : Codable {
             self = validV4 // was v4
         }
     }
+    public var compactDescription:String {
+        guard isv6 else {
+            return description
+        }
+        let uint16bytes = data[1...].withUnsafeBytes({
+            var tmp:[UInt16] = []
+            for i in stride(from: $0.startIndex, to: $0.endIndex, by: 2) {
+                let u16 = ($0.baseAddress! + i).assumingMemoryBound(to: UInt16.self).pointee
+                tmp.append(Self.systemIsLittleEndian ? u16.byteSwapped : u16)
+            }
+            return tmp
+        })
+        if var s = uint16bytes.firstIndex(of: 0) {
+            var pairs:[Range<Int>] = []
+            var maxLen = 0
+            var longestZeroStrikeAt = -1
+            var len:Array<UInt16>.Index = 0
+            var e = uint16bytes.startIndex
+            while s < uint16bytes.endIndex {
+                e = uint16bytes[s...].firstIndex(where: { $0 != 0 }) ?? uint16bytes.endIndex
+                len = e - s
+                if len > maxLen {
+                    maxLen = len
+                    longestZeroStrikeAt += 1
+                }
+                pairs.append((s..<e))
+                s = uint16bytes[e...].firstIndex(of: 0) ?? uint16bytes.endIndex
+            }
+            if len > maxLen {
+                maxLen = len
+                longestZeroStrikeAt += 1
+            }
+            if longestZeroStrikeAt > -1 {
+                let a = pairs[longestZeroStrikeAt]
+                
+                let h = uint16bytes[..<a.startIndex].map({
+                    String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+                }).joined(separator: ":") + ":"
+                let t = ":" + uint16bytes[a.endIndex...].map({
+                    String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+                }).joined(separator: ":")
+                
+                return h + t
+                
+            }
+            else {
+                return "\(description)"
+            }
+        }
+        return "\(description)"
+    }
+    public var compactDebugDescription:String {
+        guard isv6 else {
+            return compactDescription + "/\(cidr.bits)"
+        }
+        return compactDescription + "/\(cidr.bits)"
+    }
 }
 extension IPAddress : Equatable {
     public static func ==(lhs:IPAddress, rhs:IPAddress) -> Bool {
