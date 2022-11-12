@@ -130,7 +130,17 @@ public struct IPAddress : Codable {
     }
 }
 extension IPAddress : Equatable {
+    ///
+    /// Returns a boolean value indicating if two IPAddress
+    /// instances are representing exactly the same ip address
+    /// and network mask.
+    ///
+    /// - Returns: Returns true only when both ip addresses are of
+    ///  same type and their ip address and network mask (cidr) are equal.
     public static func ==(lhs:IPAddress, rhs:IPAddress) -> Bool {
+        guard lhs.type == rhs.type else {
+            return false
+        }
         return lhs.data == rhs.data && lhs.cidr == rhs.cidr
     }
 }
@@ -292,14 +302,19 @@ extension IPAddress {
                 return nil
             }
             let orEd = Data(zip(data[1...], cidr.bytes.map({ ~$0 })).map { $0 | $1 })
-//            print("ip  ", data[1...].map({ $0 }))
-//            print("cidr", cidr.bytes.map({ $0 }))
-//            print("ored", orEd.map({ $0 }))
             return IPAddress(data: orEd, cidr: networkAddress.cidr.bits)
         }
     }
     /// A boolean value indicating wheter this ip address contains the other ip address
+    ///
+    /// - Returns: Returns false when address types don't match.
+    /// In case `self` or `other` are network addresses, returns true only if
+    /// `self` contains `other` entirely.
     public func contains(_ other:IPAddress) -> Bool {
+        
+        guard type == other.type else {
+            return false
+        }
         guard cidr.isSingleEndPoint == false else {
             return self == other
         }
@@ -308,7 +323,6 @@ extension IPAddress {
             // "other" is a network
             // return true if "this network" contains the "other" network entirely
 
-            //print(debugDescription, other.debugDescription, other.networkAddress.debugDescription, other.broadcastAddress)
             switch type {
             case .v4:
                 let myRange = networkAddress.ipv4rawValue!...broadcastAddress!.ipv4rawValue!
@@ -318,14 +332,15 @@ extension IPAddress {
                 return other.networkAddress >= networkAddress && other.broadcastAddress! <= broadcastAddress!
             }
         }
-        //print(debugDescription, "contains(", other.debugDescription, ")")
         // "this ip address" is a network
         // "other" is a single end point
         // return true if "this network" contains that specific single ip address
         switch type {
         case .v4:
+            // both are same type
             return other.ipv4rawValue! >= networkAddress.ipv4rawValue! && other.ipv4rawValue! <= broadcastAddress!.ipv4rawValue!
         case .v6:
+            // both are same type
             return other >= networkAddress && other <= broadcastAddress!
         }
     }
