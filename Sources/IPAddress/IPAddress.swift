@@ -221,7 +221,7 @@ extension IPAddress : CustomDebugStringConvertible {
 extension IPAddress {
     public var rawAddressBytes:Data { return data[1...] }
     private var ipv4rawValue:UInt32? {
-        guard cidr.bits <= 32 else { return nil }
+        guard cidr.bits <= 32, type == .v4 else { return nil }
         return data[1...].withUnsafeBytes({
             let u32 = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
             return Self.systemIsLittleEndian ? u32.byteSwapped : u32
@@ -252,8 +252,12 @@ extension IPAddress {
         case .v6: return data == Data([UInt8(1),0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1])
         }
     }
-    /// Returns the ip address´s network address
-    public var networkAddress:IPAddress {
+    /// Network address of the network this ip address belongs to
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network
+    /// (is a single end point). Othervice returns network address of the network this ip belongs to with cidr set to
+    /// the corresponding network.
+    public var networkAddress:IPAddress? {
         let cb = cidr.bytes
         switch type {
         case .v4: return IPAddress(data[1] & cb[0], data[2] & cb[1], data[3] & cb[2], data[4] & cb[3], cidr: cidr.bits)!
@@ -264,45 +268,55 @@ extension IPAddress {
             return addr
         }
     }
-    /// Returns the router address of the network this ip address belongs to
+    /// Router address of the network this ip address belongs to
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network
+    /// (is a single end point). Othervice returns router's ip address of the network with cidr set to
+    /// the corresponding network.
     public var routerAddress:IPAddress? {
-        var nwa = networkAddress
         switch type {
         case .v4:
-            guard cidr.bits != 32 else {
+            guard cidr.bits != 32, let netAddr = networkAddress else {
                 return nil
             }
-            guard networkAddress.ipv4rawValue != UInt32.max else {
-                return networkAddress
+            guard netAddr.ipv4rawValue != UInt32.max else {
+                return netAddr
             }
-            nwa = IPAddress(nwa.ipv4rawValue! + 1, cidr: networkAddress.cidr.bits)
+            guard let rawNa = netAddr.ipv4rawValue else {
+                return nil
+            }
+            return IPAddress(rawNa + 1, cidr: cidr.bits)
         case .v6:
-            guard cidr.bits != 128 else {
+            guard cidr.bits != 128, var netAddr = networkAddress else {
                 return nil
             }
             for i in stride(from: 16, through: 1, by: -1) {
-                guard nwa.data[i] != 255 else { continue }
-                nwa.data[i] = nwa.data[i] + 1
+                guard netAddr.data[i] != 255 else { continue }
+                netAddr.data[i] = netAddr.data[i] + 1
                 break
             }
+            return netAddr
         }
-        return nwa
     }
-    /// Returns the broadcast address of the network this ip address belongs to
+    /// Broadcast address of the network this ip address belongs to
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network
+    /// (is a single end point). Othervice returns first ip address of the network with cidr set to
+    /// the corresponding network.
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
-            guard cidr.bits != 32 else {
+            guard cidr.bits != 32, let rawValue = networkAddress?.ipv4rawValue else {
                 return nil
             }
-            let next = networkAddress.ipv4rawValue! + UInt32(cidr.hostCount - 1)
-            return IPAddress(next, cidr: networkAddress.cidr.bits)
+            let next = rawValue + UInt32(cidr.hostCount - 1)
+            return IPAddress(next, cidr: networkAddress!.cidr.bits)
         case .v6:
-            guard cidr.bits != 128 else {
+            guard cidr.bits != 128, let na = networkAddress else {
                 return nil
             }
             let orEd = Data(zip(data[1...], cidr.bytes.map({ ~$0 })).map { $0 | $1 })
-            return IPAddress(data: orEd, cidr: networkAddress.cidr.bits)
+            return IPAddress(data: orEd, cidr: na.cidr.bits)
         }
     }
     /// A boolean value indicating wheter this ip address contains the other ip address
@@ -325,11 +339,22 @@ extension IPAddress {
 
             switch type {
             case .v4:
-                let myRange = networkAddress.ipv4rawValue!...broadcastAddress!.ipv4rawValue!
-                return myRange.contains(other.networkAddress.ipv4rawValue!) &&
+                guard let na = networkAddress?.ipv4rawValue,
+                      let ba = broadcastAddress?.ipv4rawValue,
+                      let oa = other.networkAddress?.ipv4rawValue else {
+                    return false
+                }
+                let myRange = na...ba
+                return myRange.contains(oa) &&
                 myRange.contains(other.broadcastAddress!.ipv4rawValue!)
             case .v6:
-                return other.networkAddress >= networkAddress && other.broadcastAddress! <= broadcastAddress!
+                guard let ona = other.networkAddress,
+                      let na = networkAddress,
+                      let oba = other.broadcastAddress,
+                      let ba = broadcastAddress else {
+                    return false
+                }
+                return ona >= na && oba <= ba
             }
         }
         // "this ip address" is a network
@@ -338,10 +363,18 @@ extension IPAddress {
         switch type {
         case .v4:
             // both are same type
-            return other.ipv4rawValue! >= networkAddress.ipv4rawValue! && other.ipv4rawValue! <= broadcastAddress!.ipv4rawValue!
+            guard let oa = other.ipv4rawValue,
+                  let na = networkAddress?.ipv4rawValue,
+                  let ba = broadcastAddress?.ipv4rawValue else {
+                return false
+            }
+            return oa >= na && oa <= ba
         case .v6:
             // both are same type
-            return other >= networkAddress && other <= broadcastAddress!
+            guard let na = networkAddress, let ba = broadcastAddress else {
+                return false
+            }
+            return other >= na && other <= ba
         }
     }
     /// Initializes an ipv4 address

@@ -205,9 +205,17 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(1, 2, 3, 4, cidr: 32),
                 ]
             for (i,expected) in zip(CIDR.validV4Range, expectedNetworkAddress) {
-                    let v4 = IPAddress(1, 2, 3, 4, cidr: i)
-                XCTAssertEqual(v4?.networkAddress, expected, "\(i): \(String(describing: v4?.networkAddress))")
-                    XCTAssertEqual(v4?.networkAddress.debugDescription, expected!.debugDescription)
+                guard let v4 = IPAddress(1, 2, 3, 4, cidr: i),
+                let ee = expected else {
+                    XCTFail()
+                    return
+                }
+                XCTAssertEqual(v4.networkAddress, ee, "\(i): \(String(describing: v4.networkAddress))")
+                guard let na = v4.networkAddress else {
+                    XCTFail()
+                    return
+                }
+                XCTAssertEqual(na.debugDescription, ee.debugDescription)
             }
         }
         do { // v6
@@ -222,14 +230,14 @@ final class IPAddressTests: XCTestCase {
             ]
             for (i,expected) in zip(0..<expectedNetworkAddress.count, expectedNetworkAddress) {
                 let v6 = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: expected.cidr.bits)!
-                XCTAssertEqual(v6.networkAddress, expected, "\(i): \(v6.networkAddress)")
-                XCTAssertEqual(v6.networkAddress.debugDescription, expected.debugDescription)
+                XCTAssertEqual(v6.networkAddress, expected, "\(i): \(v6.networkAddress as Any)")
+                XCTAssertEqual(v6.networkAddress!.debugDescription, expected.debugDescription)
             }
             XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress,
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!)
             XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress,
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!)
-            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress.rawAddressBytes,
+            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65)!.networkAddress!.rawAddressBytes,
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65)!.rawAddressBytes)
         }
     }
