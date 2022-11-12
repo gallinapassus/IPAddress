@@ -290,11 +290,38 @@ final class IPAddressTests: XCTestCase {
                            nil)
         }
     }
-    func test_comparable() {
-        do {
-            
+    func test_equatable() {
+        do { // v4
+            XCTAssertTrue(IPAddress(127, 0, 0, 1) == IPAddress(127, 0, 0, 1)) // both; addr & cidr are equal
+            XCTAssertFalse(IPAddress(127, 0, 0, 1, cidr: 31) == IPAddress(127, 0, 0, 1)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(127, 0, 0, 1) == IPAddress(127, 0, 0, 1, cidr: 30)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(127, 0, 0, 1, cidr: 22) == IPAddress(127, 0, 0, 1, cidr: 30)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(0, 0, 0, 1, cidr: 30) == IPAddress(127, 0, 0, 1, cidr: 30)) // ip addr doesn't match
         }
-        do {
+        do { // v6
+            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 1) == IPAddress(0, 0, 0, 0, 0, 0, 0, 1)) // both; addr & cidr are equal
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 64) == IPAddress(0, 0, 0, 0, 0, 0, 0, 1)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1) == IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 32)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 64) == IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 32)) // cidr doesn't match
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64) == IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 64)) // ip addr doesn't match
+        }
+        do { // v4 & v6 mixed
+            XCTAssertFalse(IPAddress(127, 0, 0, 1) == IPAddress(0, 0, 0, 0, 127, 0, 0, 1)) // different types
+            XCTAssertFalse(IPAddress(127, 0, 0, 1) == IPAddress(127, 0, 0, 1, 0, 0, 0, 0)) // different types
+            XCTAssertFalse(IPAddress(127, 0, 0, 1, cidr: 28) == IPAddress(0, 0, 0, 0, 127, 0, 0, 1)) // different types
+            XCTAssertFalse(IPAddress(127, 0, 0, 1) == IPAddress(127, 0, 0, 1, 0, 0, 0, 0, cidr: 64)) // different types
+        }
+    }
+    func test_comparable() {
+        do { // v4
+            let ipv4host_a = IPAddress(62, 115, 44, 0)
+            let ipv4host_b = IPAddress(62, 115, 44, 164)
+            let ipv4host_c = IPAddress(62, 115, 44, 1, cidr: 22)!
+            XCTAssertTrue(ipv4host_a < ipv4host_b)
+            XCTAssertTrue(ipv4host_a < ipv4host_c)
+            XCTAssertFalse(ipv4host_b < ipv4host_c)
+        }
+        do { // v6
             let v6host_a = IPAddress(1, 2, 3, 4, 5, 6, 7, 7)
             let v6host_b = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
             let v6host_c = IPAddress(1, 2, 3, 4, 5, 6, 7, 9)
@@ -311,11 +338,23 @@ final class IPAddressTests: XCTestCase {
             
             XCTAssertFalse(IPAddress(1, 2, 3, 4, 5, 6, 7, 8) > IPAddress(1, 2, 3, 4, 5, 0x100, 0, 0))
         }
+        do { // v4 & v6 mixed
+            XCTAssertFalse(IPAddress(1, 2, 3, 4) == IPAddress(1, 2, 3, 4, 0, 0, 0, 0))
+        }
     }
     func test_contains() {
-        // TODO: make tests between different ip address types v4.contains(v6) and v6.contains(v4)
-        do {
-            
+        do { // v4
+            let ipv4host_a = IPAddress(62, 115, 44, 0)
+            let ipv4host_b = IPAddress(62, 115, 44, 164)
+            let ipv4host_c = IPAddress(62, 115, 44, 0, cidr: 22)!
+
+            XCTAssertTrue(ipv4host_c.contains(ipv4host_a))
+            XCTAssertFalse(ipv4host_a.contains(ipv4host_b))
+            XCTAssertTrue(ipv4host_c.contains(ipv4host_a))
+            XCTAssertTrue(ipv4host_c.contains(ipv4host_b))
+            XCTAssertFalse(ipv4host_a.contains(ipv4host_c))
+            XCTAssertFalse(ipv4host_b.contains(ipv4host_c))
+
             let v4network = IPAddress(192, 168, 9, 224, cidr: 28)!
             let v4host_below = IPAddress(192, 168, 9, 223)
             let v4host_above = IPAddress(192, 168, 9, 240)
@@ -347,7 +386,7 @@ final class IPAddressTests: XCTestCase {
             XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 22)!))
             XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 23)!))
         }
-        do {
+        do { // v6
             let v6network = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 88)!
             let v6host_below = IPAddress(1, 2, 3, 4, 4, 65535, 65535, 65535)
             let v6host_above = IPAddress(1, 2, 3, 4, 5, 256, 0, 0)
@@ -393,6 +432,10 @@ final class IPAddressTests: XCTestCase {
             XCTAssertTrue(IPAddress(172, 16, 16, 0, cidr: 22)!.contains(IPAddress(172, 16, 17, 1, cidr: 23)!))
 
         }
+        do { // v4 & v6 mixed
+            XCTAssertFalse(IPAddress(127, 0, 0, 1).contains(IPAddress(127, 0, 0, 1, 0, 0, 0, 0)))
+            XCTAssertFalse(IPAddress(127, 0, 0, 1, 0, 0, 0, 0).contains(IPAddress(127, 0, 0, 1)))
+        }
     }
     func test_ipv4_init_performance() {
         measure {
@@ -412,6 +455,32 @@ final class IPAddressTests: XCTestCase {
             }
             let t1 = DispatchTime.now().uptimeNanoseconds
             print("Initialized \(UInt16.max) ipv6 addresses (from UInt16's) in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/init")
+        }
+    }
+    func test_ipv4_contains_performance() {
+        let a = IPAddress(127, 0, 0, 1)
+        let b = IPAddress(127, 0, 0, 1, cidr: 8)!
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in UInt32(0)..<UInt32(UInt16.max) {
+                let _ = a.contains(a) // true
+                let _ = a.contains(b) // false
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("Performed \(Int(UInt16.max) * 2) contains(other:) calls in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/invocation")
+        }
+    }
+    func test_ipv6_contains_performance() {
+        let a = IPAddress(0, 0, 0, 0, 0, 0, 0, 1)
+        let b = IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64)!
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in UInt16(0)..<UInt16.max {
+                let _ = a.contains(a) // true
+                let _ = a.contains(b) // false
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("Performed \(Int(UInt16.max) * 2) contains(other:) calls in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/invocation")
         }
     }
     func test_init_from_string_performance() {
