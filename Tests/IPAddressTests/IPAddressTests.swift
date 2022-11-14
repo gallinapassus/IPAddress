@@ -532,6 +532,109 @@ final class IPAddressTests: XCTestCase {
             XCTAssertEqual(IPAddress(str)?.compactDescription, expected)
         }
     }
+    func test_iterator() {
+        do { // v4
+            let cidr = 30
+            let expected = [
+                IPAddress(192, 168, 13, 4, cidr: cidr)!,
+                IPAddress(192, 168, 13, 5, cidr: cidr)!,
+                IPAddress(192, 168, 13, 6, cidr: cidr)!,
+                IPAddress(192, 168, 13, 7, cidr: cidr)!,
+            ]
+            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
+
+            var iter = IPAddressIterator(address: ip)
+            var index = 0
+            while let i = iter.next() {
+                XCTAssertEqual(i, expected[index])
+                index += 1
+            }
+        }
+        do { // v6
+            let cidr = 126
+            let expected = [
+                IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xfffc, cidr: cidr)!,
+                IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xfffd, cidr: cidr)!,
+                IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xfffe, cidr: cidr)!,
+                IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr)!,
+            ]
+            let ip = IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr)!
+            var iter = IPAddressIterator(address: ip)
+            var index = 0
+            while let i = iter.next() {
+                XCTAssertEqual(i, expected[index])
+                index += 1
+            }
+        }
+    }
+    func test_sequence() {
+        do { // v4
+            
+            let cidr = 30
+            let expected = [
+                IPAddress(192, 168, 13, 4, cidr: cidr)!,
+                IPAddress(192, 168, 13, 5, cidr: cidr)!,
+                IPAddress(192, 168, 13, 6, cidr: cidr)!,
+                IPAddress(192, 168, 13, 7, cidr: cidr)!,
+            ]
+            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
+            
+            let seq = IPAddressSequence(address: ip)
+            XCTAssertEqual(seq.underestimatedCount, 4)
+            for (value,expected) in zip(seq,expected) {
+                XCTAssertEqual(value, expected)
+            }
+        }
+    }
+    func test_a_crashing_bug() {
+        // This is currently allowed AND is very very confusing + eventually crashes
+        // TODO: change IPAddress.cidr from 'var' to 'let'
+        var v6 = IPAddress(0xffff, 0, 0, 0, 0, 0, 0, 0)
+        print(v6.type, v6.compactDebugDescription, v6.networkAddress!.compactDebugDescription)
+        v6.cidr = CIDR(for: .v4, bits: 32)
+        // confusing
+        print(v6.type, v6.compactDebugDescription, v6.networkAddress!.compactDebugDescription)
+        // crashes
+        // print(v6.routerAddress)
+        XCTFail("fix this!")
+    }
+    /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
+       makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
+       the Int's capabilities.
+     
+    func test_strideable() {
+        do { // v4
+            let cidr = 30
+            let expected = [
+                IPAddress(192, 168, 13, 4, cidr: cidr)!,
+                IPAddress(192, 168, 13, 5, cidr: cidr)!,
+                IPAddress(192, 168, 13, 6, cidr: cidr)!,
+                IPAddress(192, 168, 13, 7, cidr: cidr)!,
+            ]
+            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
+
+            let distance = expected.first!.distance(to: expected.last!)
+            XCTAssertEqual(distance, 3)
+            for (value,expected) in zip(stride(from: ip.networkAddress!, through: ip.broadcastAddress!, by: 1), expected) {
+                XCTAssertEqual(value, expected)
+            }
+        }
+        do { // v4
+            let cidr = 27
+            let expected = [
+                IPAddress(192, 168, 13, 6, cidr: cidr)!,
+                IPAddress(192, 168, 13, 2, cidr: cidr)!,
+            ]
+            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
+            
+            let distance = ip.distance(to: ip.networkAddress!)
+            XCTAssertEqual(distance, -6)
+            for (value,expected) in zip(stride(from: ip, through: ip.networkAddress!, by: -4), expected) {
+                XCTAssertEqual(value, expected)
+            }
+        }
+    }
+     */
 }
 final class CIDRTests: XCTestCase {
     func test_CIDR_init() {

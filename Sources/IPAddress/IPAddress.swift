@@ -309,8 +309,8 @@ extension IPAddress {
             guard cidr.bits != 32, let rawValue = networkAddress?.ipv4rawValue else {
                 return nil
             }
-            let next = rawValue + UInt32(cidr.hostCount - 1)
-            return IPAddress(next, cidr: networkAddress!.cidr.bits)
+            let last = rawValue + UInt32(cidr.hostCount - 1)
+            return IPAddress(last, cidr: networkAddress!.cidr.bits)
         case .v6:
             guard cidr.bits != 128, let na = networkAddress else {
                 return nil
@@ -427,13 +427,13 @@ extension IPAddress {
         switch data.count {
         case 4:
             let b = bits ?? 32
-            guard b >= 0, b <= 32 else {
+            guard CIDR.validV4Range.contains(b) else {
                 return nil
             }
             cidr = CIDR(for: .v4, bits: b)
         case 16:
             let b = bits ?? 128
-            guard b >= 0, b <= 128 else {
+            guard CIDR.validV6Range.contains(b) else {
                 return nil
             }
             cidr = CIDR(for: .v6, bits: b)
@@ -452,5 +452,103 @@ extension IPAddress {
             // big-endian   little-endian
             return ptr[0] < ptr[1] ? true : false
         }
+    }
+}
+
+public struct IPAddressIterator : IteratorProtocol {
+    public typealias Element = IPAddress
+
+    private (set) public var address:IPAddress
+    private let limit:IPAddress
+    private lazy var isLittleEndian = {
+        withUnsafeBytes(of: UInt16(256)) { (ptr) -> Bool in
+            return ptr[0] < ptr[1] ? true : false
+        }
+    }()
+
+    public init(address:IPAddress) {
+        self.address = address.networkAddress ?? address
+        self.limit = address.broadcastAddress ?? address
+    }
+
+    mutating public func next() -> Element? {
+        switch address.type {
+        case .v4:
+            let u32 = address.rawAddressBytes.withUnsafeBytes({
+                let p = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
+                return isLittleEndian ? p.byteSwapped : p
+            })
+            guard address <= limit else { return nil }
+            defer {
+                self.address = IPAddress(u32 + 1, cidr: address.cidr.bits)
+            }
+            return self.address
+        case .v6:
+            let hi = address.rawAddressBytes.withUnsafeBytes({
+                let p = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
+                return isLittleEndian ? p.byteSwapped : p
+            })
+            let lo = address.rawAddressBytes.withUnsafeBytes({
+                let p = $0.baseAddress!.advanced(by: MemoryLayout<UInt64>.size).assumingMemoryBound(to: UInt64.self).pointee
+                return isLittleEndian ? p.byteSwapped : p
+            })
+            let newLo:UInt64
+            let newHi:UInt64
+            if lo < UInt64.max {
+                newLo = lo + 1
+                newHi = hi
+            }
+            else {
+                if hi < UInt64.max {
+                    newHi = hi + 1
+                    newLo = 0
+                }
+                else {
+                    // overflow
+                    return nil
+                }
+            }
+            var data = Data([address.type.rawValue])
+            withUnsafeBytes(of: isLittleEndian ? newHi.byteSwapped : newHi, {
+                for i in $0.indices {
+                    let foo = $0[i]
+                    data.append(foo)
+                }
+            })
+            withUnsafeBytes(of: isLittleEndian ? newLo.byteSwapped : newLo, {
+                for i in $0.indices {
+                    let foo = $0[i]
+                    data.append(foo)
+                }
+            })
+
+            // Note: We could us (below)
+            // let a = IPAddress(data: data[1...], cidr: address.cidr.bits)!
+            // as above init will never fail because address is a valid ipv6
+            // address.
+            guard let nextAddress = IPAddress(data: data[1...], cidr: address.cidr.bits) else { return nil }
+            guard address <= limit else { return nil }
+            defer {
+                self.address = nextAddress
+            }
+            return self.address
+        }
+    }
+}
+public struct IPAddressSequence: Sequence {
+    public let startAddress: IPAddress
+    public let endAddress: IPAddress
+    public init(address:IPAddress) {
+        self.startAddress = address.networkAddress ?? address
+        self.endAddress = address.broadcastAddress ?? address
+    }
+    public func makeIterator() -> IPAddressIterator {
+        IPAddressIterator(address: startAddress)
+    }
+    public var underestimatedCount: Int {
+        guard startAddress.cidr.hostCount <= BigInt(Int.max) else {
+            return Int.max
+        }
+        return Int(startAddress.cidr.hostCount)
     }
 }
