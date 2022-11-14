@@ -12,7 +12,7 @@ public struct IPAddress : Codable {
     private var data:Data
 
     /// Classless Inter-Domain Routing information attached to this ip address
-    public var cidr:CIDR
+    public let cidr:CIDR
 
     /// Initializes an ipv4 address
     ///
@@ -261,11 +261,7 @@ extension IPAddress {
         let cb = cidr.bytes
         switch type {
         case .v4: return IPAddress(data[1] & cb[0], data[2] & cb[1], data[3] & cb[2], data[4] & cb[3], cidr: cidr.bits)!
-        case .v6:
-            let arr:[UInt8] = zip(data[1...], cb).map({ $0 & $1 })
-            var addr = IPAddress(arr)!
-            addr.cidr = CIDR(for: .v6, bits: cidr.bits)
-            return addr
+        case .v6: return IPAddress(data: Data(zip(data[1...], cb).map({ $0 & $1 })), cidr: cidr.bits)
         }
     }
     /// Router address of the network this ip address belongs to
@@ -423,24 +419,23 @@ extension IPAddress {
     }
     /// Initializes an ipv4 or ipv6 address from Data
     public init?(data:Data, cidr bits:Int? = nil) {
-        let cidr:CIDR
         switch data.count {
         case 4:
             let b = bits ?? 32
             guard CIDR.validV4Range.contains(b) else {
                 return nil
             }
-            cidr = CIDR(for: .v4, bits: b)
+            self.cidr = CIDR(for: .v4, bits: b)
+            self.data = [IPAddrType.v4.rawValue & 0b11] + data
         case 16:
             let b = bits ?? 128
             guard CIDR.validV6Range.contains(b) else {
                 return nil
             }
-            cidr = CIDR(for: .v6, bits: b)
+            self.cidr = CIDR(for: .v6, bits: b)
+            self.data = [IPAddrType.v6.rawValue & 0b11] + data
         default: return nil
         }
-        self.init(data.withUnsafeBytes({ Array($0) }))
-        self.cidr = cidr
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
