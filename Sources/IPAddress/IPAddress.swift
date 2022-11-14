@@ -14,6 +14,9 @@ public struct IPAddress : Codable {
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidr:CIDR
 
+    /// Returns an enumeration value describing the contained ip address type
+    public let type:IPAddrType
+
     /// Initializes an ipv4 address
     ///
     /// Initializes an ipv4 address from an UInt32 value.
@@ -21,6 +24,7 @@ public struct IPAddress : Codable {
         let u8bytes = Data([0]) + withUnsafeBytes(of: Self.systemIsLittleEndian ? u32.byteSwapped : u32, { Array($0) })
         self.data = Data(u8bytes)
         self.cidr = CIDR(for: .v4, bits: bits)
+        self.type = .v4
     }
 
     /// Initializes an ipv4 or ipv6 address
@@ -32,10 +36,12 @@ public struct IPAddress : Codable {
             let u8 = [IPAddrType.v4.rawValue] + bytes
             self.data = Data(u8)
             self.cidr = CIDR(for: .v4, bits: 32)
+            self.type = .v4
         case 16:
             let u8 = [IPAddrType.v6.rawValue] + bytes
             self.data = Data(u8)
             self.cidr = CIDR(for: .v6, bits: 128)
+            self.type = .v6
         default: return nil
         }
     }
@@ -235,10 +241,6 @@ extension IPAddress {
     public var isv6:Bool {
         (data[0] & 0b11) == IPAddrType.v6.rawValue
     }
-    /// Returns an enumeration value describing the contained ip address type
-    public var type:IPAddrType {
-        IPAddrType(rawValue: data[0] & 0b11)!
-    }
     /// Returns ip address's cidr mask binary representation as String
     public var cidrBitMaskDescription:String {
         mutating get {
@@ -378,6 +380,7 @@ extension IPAddress {
         let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
         self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: CIDR.validV4Range.upperBound)
+        self.type = .v4
     }
     /// Initializes an ipv4 address
     public init?(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
@@ -387,6 +390,7 @@ extension IPAddress {
         let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
         self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: bits)
+        self.type = .v4
     }
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
@@ -399,6 +403,7 @@ extension IPAddress {
         else {
             self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
+        self.type = .v6
     }
     /// Initializes an ipv6 address
     public init?(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
@@ -414,6 +419,7 @@ extension IPAddress {
         else {
             self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
+        self.type = .v6
     }
     /// Initializes an ipv4 or ipv6 address from Data
     public init?(data:Data, cidr bits:Int? = nil) {
@@ -425,6 +431,7 @@ extension IPAddress {
             }
             self.cidr = CIDR(for: .v4, bits: b)
             self.data = [IPAddrType.v4.rawValue & 0b11] + data
+            self.type = .v4
         case 16:
             let b = bits ?? 128
             guard CIDR.validV6Range.contains(b) else {
@@ -432,6 +439,7 @@ extension IPAddress {
             }
             self.cidr = CIDR(for: .v6, bits: b)
             self.data = [IPAddrType.v6.rawValue & 0b11] + data
+            self.type = .v6
         default: return nil
         }
     }
