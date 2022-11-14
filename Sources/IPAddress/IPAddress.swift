@@ -9,7 +9,7 @@ public struct IPAddress : Codable {
     public enum IPAddrType : UInt8, Codable { case v4 = 0, v6 = 1 /*, v8 = 2, v10 = 3 */ }
 
     /// Data storage for storing ip address type and address bytes
-    private var data:Data
+    private let data:Data
 
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidr:CIDR
@@ -283,15 +283,15 @@ extension IPAddress {
             }
             return IPAddress(rawNa + 1, cidr: cidr.bits)
         case .v6:
-            guard cidr.bits != 128, var netAddr = networkAddress else {
+            guard cidr.bits != 128, var netAddr = networkAddress?.data else {
                 return nil
             }
             for i in stride(from: 16, through: 1, by: -1) {
-                guard netAddr.data[i] != 255 else { continue }
-                netAddr.data[i] = netAddr.data[i] + 1
+                guard netAddr[i] != 255 else { continue }
+                netAddr[i] = netAddr[i] + 1
                 break
             }
-            return netAddr
+            return IPAddress(data: netAddr[1...], cidr: cidr.bits)
         }
     }
     /// Broadcast address of the network this ip address belongs to
@@ -390,15 +390,14 @@ extension IPAddress {
     }
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
-        self.data = Data([IPAddrType.v6.rawValue])
         self.cidr = CIDR(for: .v6, bits: CIDR.validV6Range.upperBound)
         if Self.systemIsLittleEndian {
-            self.data.append(Data([a.byteSwapped, b.byteSwapped, c.byteSwapped,
-                                   d.byteSwapped, e.byteSwapped, f.byteSwapped,
-                                   g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) })))
+            self.data = Data([IPAddrType.v6.rawValue & 0b11] +
+                             [a.byteSwapped, b.byteSwapped, c.byteSwapped, d.byteSwapped,
+                              e.byteSwapped, f.byteSwapped, g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) }))
         }
         else {
-            self.data.append(Data([a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) })))
+            self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
     }
     /// Initializes an ipv6 address
@@ -406,15 +405,14 @@ extension IPAddress {
         guard CIDR.validV6Range.contains(bits) else {
             return nil
         }
-        self.data = Data([IPAddrType.v6.rawValue])
         self.cidr = CIDR(for: .v6, bits: bits)
         if Self.systemIsLittleEndian {
-            self.data.append(Data([a.byteSwapped, b.byteSwapped, c.byteSwapped,
-                                   d.byteSwapped, e.byteSwapped, f.byteSwapped,
-                                   g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) })))
+            self.data = Data([IPAddrType.v6.rawValue & 0b11] +
+                             [a.byteSwapped, b.byteSwapped, c.byteSwapped, d.byteSwapped,
+                              e.byteSwapped, f.byteSwapped, g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) }))
         }
         else {
-            self.data.append(Data([a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) })))
+            self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
     }
     /// Initializes an ipv4 or ipv6 address from Data
