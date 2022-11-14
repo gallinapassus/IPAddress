@@ -408,7 +408,7 @@ final class IPAddressTests: XCTestCase {
             for other in v6host_inrange {
                 let msg = [
                     "ip\(v6network.type) network \(v6network.networkAddress.debugDescription)",
-                    "(range \(v6network.routerAddress!.debugDescription)",
+                    "(range \(v6network.routerAddress?.debugDescription as Any)",
                     "...",
                     "\(v6network.broadcastAddress!.debugDescription))",
                     "does not contain \(other.debugDescription)",
