@@ -406,8 +406,6 @@ final class IPAddressTests: XCTestCase {
             
             XCTAssertFalse(v6network.contains(v6host_below))
             for other in v6host_inrange {
-                var oo = other
-                oo.cidr = CIDR(for: .v6, bits: v6network.cidr.bits)
                 let msg = [
                     "ip\(v6network.type) network \(v6network.networkAddress.debugDescription)",
                     "(range \(v6network.routerAddress!.debugDescription)",
@@ -569,7 +567,7 @@ final class IPAddressTests: XCTestCase {
     }
     func test_sequence() {
         do { // v4
-            
+
             let cidr = 30
             let expected = [
                 IPAddress(192, 168, 13, 4, cidr: cidr)!,
@@ -578,25 +576,13 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(192, 168, 13, 7, cidr: cidr)!,
             ]
             let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
-            
+
             let seq = IPAddressSequence(address: ip)
             XCTAssertEqual(seq.underestimatedCount, 4)
             for (value,expected) in zip(seq,expected) {
                 XCTAssertEqual(value, expected)
             }
         }
-    }
-    func test_a_crashing_bug() {
-        // This is currently allowed AND is very very confusing + eventually crashes
-        // TODO: change IPAddress.cidr from 'var' to 'let'
-        var v6 = IPAddress(0xffff, 0, 0, 0, 0, 0, 0, 0)
-        print(v6.type, v6.compactDebugDescription, v6.networkAddress!.compactDebugDescription)
-        v6.cidr = CIDR(for: .v4, bits: 32)
-        // confusing
-        print(v6.type, v6.compactDebugDescription, v6.networkAddress!.compactDebugDescription)
-        // crashes
-        // print(v6.routerAddress)
-        XCTFail("fix this!")
     }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
