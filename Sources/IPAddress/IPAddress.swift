@@ -8,8 +8,18 @@ public struct IPAddress : Codable {
     /// Ip address type enumeration
     public enum IPAddrType : UInt8, Codable { case v4 = 0, v6 = 1 /*, v8 = 2, v10 = 3 */ }
 
-    /// Data storage for storing ip address type and address bytes
+    /// Data storage for storing ipv6 address type and address bytes
     private let data:Data
+    /// Data storage for storing an ipv4 address
+    ///
+    /// Value is stored in current system's endianness (on little endian systems
+    /// value is stored as little endian and on big endian systems value is stored
+    /// as big endian. Required conversions to network byte order (=big endian)
+    /// will happen when needed.
+    ///
+    /// On both (big- and little endian) systems UInt32(1) will result to ipv4
+    /// address 0.0.0.1 and UInt32.max will result in 255.255.255.255.
+    private let sysendianIpv4:UInt32
 
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidr:CIDR
@@ -19,17 +29,22 @@ public struct IPAddress : Codable {
 
     /// Initializes an ipv4 address
     ///
-    /// Initializes an ipv4 address from an UInt32 value.
+    /// Initializes an ipv4 address from UInt32 value.
+    ///
+    /// Initializing IPAddress with UInt32(1) will result in 0.0.0.1 and
+    /// with UInt32.max will result in 255.255.255.255.
     public init(_ u32: UInt32, cidr bits:Int = 32) {
         let u8bytes = Data([0]) + withUnsafeBytes(of: Self.systemIsLittleEndian ? u32.byteSwapped : u32, { Array($0) })
         self.data = Data(u8bytes)
         self.cidr = CIDR(for: .v4, bits: bits)
         self.type = .v4
+        self.sysendianIpv4 = u32
     }
 
     /// Initializes an ipv4 or ipv6 address
     ///
     /// Initializes an ipv4 or ipv6 address from given UInt8 bytes.
+    /// Bytes must be in big endian byte order (a.k.a. network byte order).
     public init?(_ bytes:[UInt8]) {
         switch bytes.count {
         case 4:
@@ -37,11 +52,15 @@ public struct IPAddress : Codable {
             self.data = Data(u8)
             self.cidr = CIDR(for: .v4, bits: 32)
             self.type = .v4
+            self.sysendianIpv4 = Self.systemIsLittleEndian ?
+            UInt32(bytes[3]) | UInt32(bytes[2])<<8 | UInt32(bytes[1])<<16 | UInt32(bytes[0])<<24 :
+            UInt32(bytes[0]) | UInt32(bytes[1])<<8 | UInt32(bytes[2])<<16 | UInt32(bytes[3])<<24
         case 16:
             let u8 = [IPAddrType.v6.rawValue] + bytes
             self.data = Data(u8)
             self.cidr = CIDR(for: .v6, bits: 128)
             self.type = .v6
+            self.sysendianIpv4 = 0
         default: return nil
         }
     }
@@ -147,7 +166,9 @@ extension IPAddress : Equatable {
         guard lhs.type == rhs.type else {
             return false
         }
-        return lhs.data == rhs.data && lhs.cidr == rhs.cidr
+        return lhs.type == .v4 ?
+        lhs.sysendianIpv4 == rhs.sysendianIpv4 && lhs.cidr == rhs.cidr :
+        lhs.data == rhs.data && lhs.cidr == rhs.cidr
     }
 }
 extension IPAddress : Hashable {
@@ -161,7 +182,7 @@ extension IPAddress : Comparable {
         switch lhs.type {
         case .v4:
             switch rhs.type {
-            case .v4: return lhs.ipv4rawValue! < rhs.ipv4rawValue!
+            case .v4: return lhs.sysendianIpv4 < rhs.sysendianIpv4
             case .v6: return true
             }
         case .v6:
@@ -381,6 +402,9 @@ extension IPAddress {
         self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: CIDR.validV4Range.upperBound)
         self.type = .v4
+        self.sysendianIpv4 = Self.systemIsLittleEndian ?
+        UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
+        UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
     }
     /// Initializes an ipv4 address
     public init?(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
@@ -391,6 +415,9 @@ extension IPAddress {
         self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: bits)
         self.type = .v4
+        self.sysendianIpv4 = Self.systemIsLittleEndian ?
+        UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
+        UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
     }
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
@@ -404,6 +431,7 @@ extension IPAddress {
             self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
         self.type = .v6
+        self.sysendianIpv4 = 0
     }
     /// Initializes an ipv6 address
     public init?(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
@@ -420,6 +448,7 @@ extension IPAddress {
             self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
         }
         self.type = .v6
+        self.sysendianIpv4 = 0
     }
     /// Initializes an ipv4 or ipv6 address from Data
     public init?(data:Data, cidr bits:Int? = nil) {
@@ -442,6 +471,7 @@ extension IPAddress {
             self.type = .v6
         default: return nil
         }
+        self.sysendianIpv4 = 0
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
