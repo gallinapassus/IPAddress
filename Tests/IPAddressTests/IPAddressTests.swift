@@ -1,90 +1,8 @@
 import XCTest
 @testable import IPAddress
 import BigInt
-//import Parsing
 
 final class IPAddressTests: XCTestCase {
-    let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [
-        ("192.168.5.4/32", IPAddress(192, 168, 5,4, cidr: 32), "192.168.5.4"),
-        ("192.168.5.4/18", IPAddress(192, 168, 5,4, cidr: 18), "192.168.5.4"),
-        ("192.168.5.4/0", IPAddress(192, 168, 5,4, cidr: 0), "192.168.5.4"),
-        ("255.255.255.255/32", IPAddress(255, 255, 255,255, cidr: 32), "255.255.255.255"),
-        ("192.168.5.4/33", nil, nil), // invalid cidr
-        ("192.168.5.4/-5", nil, nil), // invalid cidr
-        ("192.168.5.4/a", nil, nil), // invalid cidr
-        ("192.168.5.4/", nil, nil), // missing cidr
-        ("192.168.5./18", nil, nil), // invalid quartet
-        ("192.168..4/18", nil, nil), // invalid quartet
-        ("192..5.4/18", nil, nil), // invalid quartet
-        (".168.5.4/18", nil, nil), // invalid quartet
-        ("...5.4/18", nil, nil), // invalid quartet
-        ("", nil, nil), // not v4 nor v6
-        ("a", nil, nil), // not v4 nor v6
-        ("192.-168.5.4/18", nil, nil), // invalid element
-        ("192.168.5.256/18", nil, nil), // invalid element
-        ]
-    let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
-        ("1:2:3:4:5:6:7:8/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 18), "1:2:3:4:5:6:7:8"),
-        ("1:2:3:4:5:6:7:dead/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 57005, cidr: 18), "1:2:3:4:5:6:7:dead"),
-        ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128), "::1"),
-        ("1::", IPAddress(1, 0, 0, 0, 0, 0, 0, 0), "1::"),
-        ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64), "dead::beef:1"),
-        ("ffff:/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
-        ("ffff::/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
-        ("ffff::ff/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 255, cidr: 64), "ffff::ff"),
-        ("f0f0::f1f1", IPAddress(0xf0f0, 0, 0, 0, 0, 0, 0, 0xf1f1), "f0f0::f1f1"),
-        ("a:b:c:d:e:f:0:1", IPAddress(10, 11, 12, 13, 14, 15, 0, 1), "a:b:c:d:e:f::1"),
-        ("a:b:c::d:e:f:0:1", nil, nil), // extra element
-        ("dead:beef:1/128", nil, nil), // ambiguous, is this from head or tail?
-        ("ffff0:/64", nil, nil), // This should fail
-        ("ffff0::/64", nil, nil), // This should fail
-        ("ffff0::ff/64", nil, nil), // This should fail
-        ("dead:beef:::ff/96", nil, nil), // This should fail because of :::
-        ("1:::", nil, nil), // :::
-        ("[8.8.8.8]", nil, nil), // []
-        ("ax", nil, nil), // invalid char
-        ("a:x", nil, nil), // invalid char
-        ("x", nil, nil), // invalid char
-        ("n", nil, nil), // invalid char
-        ("", nil, nil),  // empty
-        ("::", IPAddress(0, 0, 0, 0, 0, 0, 0, 0), "::"),
-        (":c:", nil, nil), // ambiguous
-        ("0000:0000:0000:0000:0000:0000:0000:00000", nil, nil), // 00000 is too long
-        (":n:n:n:n:n:n:", nil, nil), // non-hex
-        ("::n:a:n:n:n:", nil, nil), // non-hex
-        ("ffff:ffff:ffff0:ffff:ffff:", nil, nil), // overflow element
-        ("ffff", nil, nil), // This should fail as we dont know if the intention is ::ffff or ffff::
-        ("ffff:", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"), // intention is present
-        ("ffff:n", nil, nil), // This should fail because of n
-        ("ffff::", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"),
-        ("ffff:::", nil, nil), // :::
-        (":ffff", IPAddress(0, 0, 0, 0, 0, 0, 0, 65535), "::ffff"), // intention is present
-        ("::fffe", IPAddress(0, 0, 0, 0, 0, 0, 0, 65534), "::fffe"),
-        (":::ffff", nil, nil), // :::
-        (":2:3:4:5:6:7:", IPAddress(0, 2, 3, 4, 5, 6, 7, 0), "::2:3:4:5:6:7:0"), // intention is present
-        (":2::4:5:6:7:", nil, nil), // :: should be first, not in the middle
-        ("ff0:f00::aaaa:bbbb", IPAddress(0xff0, 0xf00, 0, 0, 0, 0, 0xaaaa, 0xbbbb), "ff0:f00::aaaa:bbbb"),
-        ("0:1:2:3:4:5:6:7:8", nil, nil), // Too many elements
-        (":1:2:3:4:5:6:7:8", nil, nil), // Too many elements
-        ("1:2:3:4:5:6:7:8:9", nil, nil), // Too many elements
-        ("1:2:3:4:5:6:7:8:", nil, nil), // Too many elements
-        ("2002:0db8::0001:0000", IPAddress(8194, 3512, 0, 0, 0, 0, 1, 0), "2002:db8::1:0"),
-        ("2001:db8::1:0:0:1/19", IPAddress(8193, 3512, 0, 0, 1, 0, 0, 1, cidr: 19), "2001:db8::1:0:0:1"),
-        ("2001:db8:0000:1:1:1:1:1", IPAddress(8193, 3512, 0, 1, 1, 1, 1, 1), "2001:db8::1:1:1:1:1"),
-        ("a::b", IPAddress(10, 0, 0, 0, 0, 0, 0, 11), "a::b"),
-        ("a::c::b", nil, nil), // 2 x :: not allowed
-        ("0:1:A:B:C:D:E:F", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // uppercase
-        ("0:1:a:b:c:d:e:f", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // lowercase
-        (":", nil, nil),
-        ("::", IPAddress(0, 0, 0, 0, 0, 0, 0, 0), "::"),
-        (":::", nil, nil),
-        ("::::", nil, nil),
-        (":::::", nil, nil),
-        ("::::::", nil, nil),
-        (":::::::", nil, nil),
-        ("::::::::", nil, nil),
-        (":::::::::", nil, nil),
-    ]
     func test_IPAddress_init() {
         // Failable
         // init?(_ bytes:[UInt8])
@@ -443,82 +361,6 @@ final class IPAddressTests: XCTestCase {
             XCTAssertFalse(IPAddress(127, 0, 0, 1, 0, 0, 0, 0).contains(IPAddress(127, 0, 0, 1)))
         }
     }
-    func test_ipv4_init_performance() {
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for i in UInt32(0)..<UInt32(UInt16.max) {
-                let _ = IPAddress(i)
-            }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Initialized \(UInt16.max) ipv4 addresses (from UInt32) in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/init")
-        }
-    }
-    func test_ipv6_init_performance() {
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for i in UInt16(0)..<UInt16.max {
-                let _ = IPAddress(0, 0, 0, 0, 0, 0, 0, i)
-            }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Initialized \(UInt16.max) ipv6 addresses (from UInt16's) in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/init")
-        }
-    }
-    func test_ipv4_contains_performance() {
-        let a = IPAddress(127, 0, 0, 1)
-        let b = IPAddress(127, 0, 0, 1, cidr: 8)!
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for _ in UInt32(0)..<UInt32(UInt16.max) {
-                let _ = a.contains(a) // true
-                let _ = a.contains(b) // false
-            }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Performed \(Int(UInt16.max) * 2) contains(other:) calls in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/invocation")
-        }
-    }
-    func test_ipv6_contains_performance() {
-        let a = IPAddress(0, 0, 0, 0, 0, 0, 0, 1)
-        let b = IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64)!
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for _ in UInt16(0)..<UInt16.max {
-                let _ = a.contains(a) // true
-                let _ = a.contains(b) // false
-            }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Performed \(Int(UInt16.max) * 2) contains(other:) calls in", Double(t1 - t0)/1_000_000, "ms =>", (Double(t1 - t0) / Double(UInt16.max))/1000.0, "µs/invocation")
-        }
-    }
-    func test_init_from_string_performance() {
-        print("Generating test strings...", terminator: "")
-        var a:[String] = []
-        var i:UInt16 = 0
-        while i < UInt16.max {
-            for (str, _, _) in (ipv4ParsingZoo + ipv6ParsingZoo) {
-                guard i < UInt16.max else { break }
-                a.append(str)
-                i += 1
-            }
-        }
-        print("done")
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<1550ms / ~<24µs [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<670ms  / ~<10µs [release]
-        measure {
-            var nilCount = 0
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for str in a {
-                guard let _ = IPAddress(str) else {
-                    nilCount += 1
-                    continue
-                }
-            }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Initialized \(a.count) ipv4/ipv6 addresses (from String) in",
-                  Double(t1 - t0)/1_000_000, "ms =>",
-                  (Double(t1 - t0) / Double(a.count))/1000.0, "µs/init",
-                  "(string pool has \(Int(100 * Double(nilCount) / Double(a.count)))% of addresses resulting to init failure)")
-        }
-    }
     func test_compactDescription() {
 
         for (str, _, expected) in ipv4ParsingZoo + ipv6ParsingZoo {
@@ -824,3 +666,228 @@ final class CIDRTests: XCTestCase {
         }
     }
 }
+final class PerformanceTests : XCTestCase {
+    private func ms(_ t0:UInt64, _ t1:UInt64) -> Double {
+        Double(t1 - t0) / 1_000_000.0
+    }
+    private func µs(_ t0:UInt64, _ t1:UInt64) -> Double {
+        Double(t1 - t0) / 1_000.0
+    }
+    private func rate<U:UnsignedInteger>(_ t0:UInt64, _ t1:UInt64, iterations:U) -> String {
+        let foo = Double(iterations) / (Double(t1 - t0) / 1_000_000_000)
+        return "\(foo) iterations per second"
+    }
+    func test_ipv4_init_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<95ms /   ~690 000 init/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<13ms / ~5 500 000 init/s [release]
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for i in UInt32(0)..<UInt32(UInt16.max) {
+                let _ = IPAddress(i)
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("Initialized \(UInt16.max) ipv4 addresses (from UInt32) in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/init",
+                  rate(t0, t1, iterations: UInt16.max))
+        }
+    }
+    func test_ipv6_init_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<83ms /   ~790 000 init/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<18ms / ~4 000 000 init/s [release]
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for i in UInt16(0)..<UInt16.max {
+                let _ = IPAddress(0, 0, 0, 0, 0, 0, 0, i)
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("Initialized \(UInt16.max) ipv6 addresses (from UInt16's) in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/init",
+                  rate(t0, t1, iterations: UInt16.max))
+        }
+    }
+    func test_ipv4_contains_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<31ms /  ~4 200 000 invocations/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<2ms  / ~68 000 000 invocations/s [release]
+        let a = IPAddress(127, 0, 0, 1)
+        let b = IPAddress(127, 0, 0, 1, cidr: 8)!
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in UInt32(0)..<UInt32(UInt16.max) {
+                let _ = a.contains(a) // true
+                let _ = a.contains(b) // false
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let count = UInt(UInt16.max) * 2
+            print("Performed \(count) contains(other:) calls in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
+                  rate(t0, t1, iterations: count))
+        }
+    }
+    func test_ipv6_contains_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<35ms /  ~3 800 000 invocations/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<5ms  / ~31 000 000 invocations/s [release]
+        let a = IPAddress(0, 0, 0, 0, 0, 0, 0, 1)
+        let b = IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64)!
+        measure {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in UInt16(0)..<UInt16.max {
+                let _ = a.contains(a) // true
+                let _ = a.contains(b) // false
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let count = UInt(UInt16.max) * 2
+            print("Performed \(count) contains(other:) calls in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
+                  rate(t0, t1, iterations: count))
+        }
+    }
+    func test_init_from_string_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<1550ms /  ~42 000 init/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<650ms  / ~101 000 init/s [release]
+        print("Generating test strings...", terminator: "")
+        var a:[String] = []
+        var i:UInt16 = 0
+        while i < UInt16.max {
+            for (str, _, _) in (ipv4ParsingZoo + ipv6ParsingZoo) {
+                guard i < UInt16.max else { break }
+                a.append(str)
+                i += 1
+            }
+        }
+        print("done")
+        measure {
+            var nilCount = 0
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for str in a {
+                guard let _ = IPAddress(str) else {
+                    nilCount += 1
+                    continue
+                }
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let count = UInt(a.count)
+            print("Initialized \(a.count) ipv4/ipv6 addresses (from String) in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
+                  rate(t0, t1, iterations: count),
+                  "(string pool has \(Int(100 * Double(nilCount) / Double(a.count)))% of addresses resulting to init failure)")
+        }
+    }
+    func test_ipv4_iterator_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<820ms /   ~635 000 iterations/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<150ms / ~3 500 000 iterations/s [release]
+        measure {
+            let ip = IPAddress(0, cidr: 13)
+            var iterator = IPAddressIterator(address: ip)
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = iterator.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let count = UInt64(ip.cidr.hostCount)
+            print("Performed \(count) ipv4 iterations in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/iteration",
+                  rate(t0, t1, iterations: count))
+        }
+    }
+    func test_ipv6_iterator_performance() {
+        // For reference:
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<950ms /   ~138 000 iterations/s [debug]
+        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<101ms / ~1 309 000 iterations/s [release]
+        measure {
+            let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 111)!
+            var iterator = IPAddressIterator(address: ip)
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = iterator.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let count = UInt64(ip.cidr.hostCount)
+            print("Performed \(count) ipv6 iterations in",
+                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/iteration",
+                  rate(t0, t1, iterations: count))
+        }
+    }
+}
+let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [
+    ("192.168.5.4/32", IPAddress(192, 168, 5,4, cidr: 32), "192.168.5.4"),
+    ("192.168.5.4/18", IPAddress(192, 168, 5,4, cidr: 18), "192.168.5.4"),
+    ("192.168.5.4/0", IPAddress(192, 168, 5,4, cidr: 0), "192.168.5.4"),
+    ("255.255.255.255/32", IPAddress(255, 255, 255,255, cidr: 32), "255.255.255.255"),
+    ("192.168.5.4/33", nil, nil), // invalid cidr
+    ("192.168.5.4/-5", nil, nil), // invalid cidr
+    ("192.168.5.4/a", nil, nil), // invalid cidr
+    ("192.168.5.4/", nil, nil), // missing cidr
+    ("192.168.5./18", nil, nil), // invalid quartet
+    ("192.168..4/18", nil, nil), // invalid quartet
+    ("192..5.4/18", nil, nil), // invalid quartet
+    (".168.5.4/18", nil, nil), // invalid quartet
+    ("...5.4/18", nil, nil), // invalid quartet
+    ("", nil, nil), // not v4 nor v6
+    ("a", nil, nil), // not v4 nor v6
+    ("192.-168.5.4/18", nil, nil), // invalid element
+    ("192.168.5.256/18", nil, nil), // invalid element
+]
+let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
+    ("1:2:3:4:5:6:7:8/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 18), "1:2:3:4:5:6:7:8"),
+    ("1:2:3:4:5:6:7:dead/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 57005, cidr: 18), "1:2:3:4:5:6:7:dead"),
+    ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128), "::1"),
+    ("1::", IPAddress(1, 0, 0, 0, 0, 0, 0, 0), "1::"),
+    ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64), "dead::beef:1"),
+    ("ffff:/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
+    ("ffff::/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
+    ("ffff::ff/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 255, cidr: 64), "ffff::ff"),
+    ("f0f0::f1f1", IPAddress(0xf0f0, 0, 0, 0, 0, 0, 0, 0xf1f1), "f0f0::f1f1"),
+    ("a:b:c:d:e:f:0:1", IPAddress(10, 11, 12, 13, 14, 15, 0, 1), "a:b:c:d:e:f::1"),
+    ("a:b:c::d:e:f:0:1", nil, nil), // extra element
+    ("dead:beef:1/128", nil, nil), // ambiguous, is this from head or tail?
+    ("ffff0:/64", nil, nil), // This should fail
+    ("ffff0::/64", nil, nil), // This should fail
+    ("ffff0::ff/64", nil, nil), // This should fail
+    ("dead:beef:::ff/96", nil, nil), // This should fail because of :::
+    ("1:::", nil, nil), // :::
+    ("[8.8.8.8]", nil, nil), // []
+    ("ax", nil, nil), // invalid char
+    ("a:x", nil, nil), // invalid char
+    ("x", nil, nil), // invalid char
+    ("n", nil, nil), // invalid char
+    ("", nil, nil),  // empty
+    ("::", IPAddress(0, 0, 0, 0, 0, 0, 0, 0), "::"),
+    (":c:", nil, nil), // ambiguous
+    ("0000:0000:0000:0000:0000:0000:0000:00000", nil, nil), // 00000 is too long
+    (":n:n:n:n:n:n:", nil, nil), // non-hex
+    ("::n:a:n:n:n:", nil, nil), // non-hex
+    ("ffff:ffff:ffff0:ffff:ffff:", nil, nil), // overflow element
+    ("ffff", nil, nil), // This should fail as we dont know if the intention is ::ffff or ffff::
+    ("ffff:", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"), // intention is present
+    ("ffff:n", nil, nil), // This should fail because of n
+    ("ffff::", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"),
+    ("ffff:::", nil, nil), // :::
+    (":ffff", IPAddress(0, 0, 0, 0, 0, 0, 0, 65535), "::ffff"), // intention is present
+    ("::fffe", IPAddress(0, 0, 0, 0, 0, 0, 0, 65534), "::fffe"),
+    (":::ffff", nil, nil), // :::
+    (":2:3:4:5:6:7:", IPAddress(0, 2, 3, 4, 5, 6, 7, 0), "::2:3:4:5:6:7:0"), // intention is present
+    (":2::4:5:6:7:", nil, nil), // :: should be first, not in the middle
+    ("ff0:f00::aaaa:bbbb", IPAddress(0xff0, 0xf00, 0, 0, 0, 0, 0xaaaa, 0xbbbb), "ff0:f00::aaaa:bbbb"),
+    ("0:1:2:3:4:5:6:7:8", nil, nil), // Too many elements
+    (":1:2:3:4:5:6:7:8", nil, nil), // Too many elements
+    ("1:2:3:4:5:6:7:8:9", nil, nil), // Too many elements
+    ("1:2:3:4:5:6:7:8:", nil, nil), // Too many elements
+    ("2002:0db8::0001:0000", IPAddress(8194, 3512, 0, 0, 0, 0, 1, 0), "2002:db8::1:0"),
+    ("2001:db8::1:0:0:1/19", IPAddress(8193, 3512, 0, 0, 1, 0, 0, 1, cidr: 19), "2001:db8::1:0:0:1"),
+    ("2001:db8:0000:1:1:1:1:1", IPAddress(8193, 3512, 0, 1, 1, 1, 1, 1), "2001:db8::1:1:1:1:1"),
+    ("a::b", IPAddress(10, 0, 0, 0, 0, 0, 0, 11), "a::b"),
+    ("a::c::b", nil, nil), // 2 x :: not allowed
+    ("0:1:A:B:C:D:E:F", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // uppercase
+    ("0:1:a:b:c:d:e:f", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // lowercase
+    (":", nil, nil),
+    ("::", IPAddress(0, 0, 0, 0, 0, 0, 0, 0), "::"),
+    (":::", nil, nil),
+    ("::::", nil, nil),
+    (":::::", nil, nil),
+    ("::::::", nil, nil),
+    (":::::::", nil, nil),
+    ("::::::::", nil, nil),
+    (":::::::::", nil, nil),
+]
