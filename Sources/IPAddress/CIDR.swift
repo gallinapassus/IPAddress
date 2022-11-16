@@ -7,6 +7,7 @@ public class CIDR : Codable {
     internal static let validV4Range:ClosedRange<Int> = (0...32)
     /// Valid range for ipv6 bitmask values
     internal static let validV6Range:ClosedRange<Int> = (0...128)
+    // MARK: -
     /// Bitmask size
     public let bits:Int
     /// Ip address type associated to this cidr
@@ -47,6 +48,7 @@ public class CIDR : Codable {
     public lazy var networkCount:BigInt = {
         return _mult_two(times: UInt8(bits))
     }()
+    // MARK: -
     /// Initializes a cidr
     public init(for type:IPAddress.IPAddrType, bits:Int) {
         self.type = type
@@ -71,6 +73,7 @@ extension CIDR : Hashable {
     }
 }
 extension CIDR : Comparable {
+    // Should this be reversed? What is the mental model?
     public static func <(lhs:CIDR, rhs:CIDR) -> Bool {
         lhs.bits < rhs.bits
     }
