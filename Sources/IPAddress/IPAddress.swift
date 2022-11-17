@@ -276,6 +276,20 @@ extension IPAddress : CustomDebugStringConvertible {
     }
 }
 extension IPAddress {
+    public static let ipv4localhost = IPAddress(2130706432)
+    public static let ipv6localhost = IPAddress(0, 1)
+    public static let ipv4unspecifiedAddress = IPAddress(0)
+    public static let ipv6unspecifiedAddress = IPAddress(0, 0)
+}
+extension IPAddress {
+    /// A Boolean value indicating whether this ip address is an unspecified address
+    public var isUnspecifiedAddress:Bool {
+        type == .v4 ? sysendianIpv4 == 0 : ipv6lhs == 0 && ipv6rhs == 0
+    }
+    /// A Boolean value indicating whether this ip address is a loopback address
+    public var isLoopbackAddress:Bool {
+        type == .v4 ? (2130706432...2147483647).contains(sysendianIpv4) : ipv6lhs == 0 && ipv6rhs == 1
+    }
     public var networkOrderedAddressBytes:[UInt8] {
         switch type {
         case .v4:
@@ -353,13 +367,6 @@ extension IPAddress {
             cidr.bytes.map({ $0 == 0 ? String(repeating: "0", count: 8) : String($0, radix: 2) }).joined(separator: ":")
         }
     }
-    /// A Boolean value indicating whether this ip address is a loopback address
-    public var isLoopbackAddress:Bool {
-        switch type {
-        case .v4: return (2130706432...2147483647).contains(sysendianIpv4)
-        case .v6: return networkOrderedAddressBytes == [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
-        }
-    }
     /// Network address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
@@ -415,7 +422,7 @@ extension IPAddress {
             return IPAddress(orEd, cidr: na.cidr.bits)
         }
     }
-    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int) {
+    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
         self.type = .v6
         self.sysendianIpv4 = 0
         self.ipv6lhs = lhs
