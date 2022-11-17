@@ -6,10 +6,12 @@ import Parsing
 public struct IPAddress : Codable {
 
     /// Ip address type enumeration
-    public enum IPAddrType : UInt8, Codable { case v4 = 0, v6 = 1 /*, v8 = 2, v10 = 3 */ }
+    public enum IPAddrType : UInt8, Codable { case v4 = 0, v6 = 1 }
 
     /// Data storage for storing ipv6 address type and address bytes
-    private let data:Data
+    internal let ipv6rhs:UInt64
+    internal let ipv6lhs:UInt64
+
     /// Data storage for storing an ipv4 address
     ///
     /// Value is stored in current system's endianness (on little endian systems
@@ -19,7 +21,7 @@ public struct IPAddress : Codable {
     ///
     /// On both (big- and little endian) systems UInt32(1) will result to ipv4
     /// address 0.0.0.1 and UInt32.max will result in 255.255.255.255.
-    private let sysendianIpv4:UInt32
+    internal let sysendianIpv4:UInt32
 
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidr:CIDR
@@ -34,33 +36,48 @@ public struct IPAddress : Codable {
     /// Initializing IPAddress with UInt32(1) will result in 0.0.0.1 and
     /// with UInt32.max will result in 255.255.255.255.
     public init(_ u32: UInt32, cidr bits:Int = 32) {
-        let u8bytes = Data([0]) + withUnsafeBytes(of: Self.systemIsLittleEndian ? u32.byteSwapped : u32, { Array($0) })
-        self.data = Data(u8bytes)
         self.cidr = CIDR(for: .v4, bits: bits)
         self.type = .v4
         self.sysendianIpv4 = u32
+        self.ipv6rhs = 0
+        self.ipv6lhs = 0
     }
 
     /// Initializes an ipv4 or ipv6 address
     ///
     /// Initializes an ipv4 or ipv6 address from given UInt8 bytes.
     /// Bytes must be in big endian byte order (a.k.a. network byte order).
-    public init?(_ bytes:[UInt8]) {
+    public init?(_ bytes:[UInt8], cidr bits:Int? = nil) {
         switch bytes.count {
         case 4:
-            let u8 = [IPAddrType.v4.rawValue] + bytes
-            self.data = Data(u8)
-            self.cidr = CIDR(for: .v4, bits: 32)
+            let b = bits ?? 32
+            self.cidr = CIDR(for: .v4, bits: b)
             self.type = .v4
             self.sysendianIpv4 = Self.systemIsLittleEndian ?
             UInt32(bytes[3]) | UInt32(bytes[2])<<8 | UInt32(bytes[1])<<16 | UInt32(bytes[0])<<24 :
             UInt32(bytes[0]) | UInt32(bytes[1])<<8 | UInt32(bytes[2])<<16 | UInt32(bytes[3])<<24
+            self.ipv6rhs = 0
+            self.ipv6lhs = 0
         case 16:
-            let u8 = [IPAddrType.v6.rawValue] + bytes
-            self.data = Data(u8)
-            self.cidr = CIDR(for: .v6, bits: 128)
+            let b = bits ?? 128
+            self.cidr = CIDR(for: .v6, bits: b)
             self.type = .v6
             self.sysendianIpv4 = 0
+            if Self.systemIsLittleEndian {
+                self.ipv6lhs =
+                UInt64(bytes[7])     | UInt64(bytes[6])<<8  | UInt64(bytes[5])<<16 | UInt64(bytes[4])<<24 |
+                UInt64(bytes[3])<<32 | UInt64(bytes[2])<<40 | UInt64(bytes[1])<<48 | UInt64(bytes[0])<<56
+                self.ipv6rhs =
+                UInt64(bytes[15])     | UInt64(bytes[14])<<8  | UInt64(bytes[13])<<16 | UInt64(bytes[12])<<24 |
+                UInt64(bytes[11])<<32 | UInt64(bytes[10])<<40 | UInt64(bytes[9])<<48  | UInt64(bytes[8])<<56
+            } else {
+                self.ipv6lhs =
+                UInt64(bytes[0])     | UInt64(bytes[1])<<8  | UInt64(bytes[2])<<16 | UInt64(bytes[3])<<24 |
+                UInt64(bytes[4])<<32 | UInt64(bytes[5])<<40 | UInt64(bytes[6])<<48 | UInt64(bytes[7])<<56
+                self.ipv6rhs =
+                UInt64(bytes[8])      | UInt64(bytes[9])<<8   | UInt64(bytes[10])<<16 | UInt64(bytes[11])<<24 |
+                UInt64(bytes[12])<<32 | UInt64(bytes[13])<<40 | UInt64(bytes[14])<<48 | UInt64(bytes[15])<<56
+            }
         default: return nil
         }
     }
@@ -97,17 +114,26 @@ public struct IPAddress : Codable {
         }
     }
     public var compactDescription:String {
-        guard isv6 else {
+        guard type == .v6 else {
             return description
         }
-        let uint16bytes = data[1...].withUnsafeBytes({
-            var tmp:[UInt16] = []
-            for i in stride(from: $0.startIndex, to: $0.endIndex, by: 2) {
-                let u16 = ($0.baseAddress! + i).assumingMemoryBound(to: UInt16.self).pointee
-                tmp.append(Self.systemIsLittleEndian ? u16.byteSwapped : u16)
-            }
-            return tmp
-        })
+        let uint16bytes:[UInt16]
+        if Self.systemIsLittleEndian {
+            uint16bytes = [
+                UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
+                UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
+                UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
+                UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
+
+                UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
+                UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
+                UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
+                UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
+            ]
+        }
+        else {
+            fatalError("not implemented")
+        }
         if var s = uint16bytes.firstIndex(of: 0) {
             var pairs:[Range<Int>] = []
             var maxLen = 0
@@ -139,7 +165,6 @@ public struct IPAddress : Codable {
                 }).joined(separator: ":")
                 
                 return h + t
-                
             }
             else {
                 return "\(description)"
@@ -148,9 +173,6 @@ public struct IPAddress : Codable {
         return "\(description)"
     }
     public var compactDebugDescription:String {
-        guard isv6 else {
-            return compactDescription + "/\(cidr.bits)"
-        }
         return compactDescription + "/\(cidr.bits)"
     }
 }
@@ -168,12 +190,13 @@ extension IPAddress : Equatable {
         }
         return lhs.type == .v4 ?
         lhs.sysendianIpv4 == rhs.sysendianIpv4 && lhs.cidr == rhs.cidr :
-        lhs.data == rhs.data && lhs.cidr == rhs.cidr
+        lhs.ipv6lhs == rhs.ipv6lhs && lhs.ipv6rhs == rhs.ipv6rhs && lhs.cidr == rhs.cidr
     }
 }
 extension IPAddress : Hashable {
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(data)
+        hasher.combine(type.rawValue)
+        hasher.combine(networkOrderedAddressBytes)
         hasher.combine(cidr)
     }
 }
@@ -189,31 +212,20 @@ extension IPAddress : Comparable {
             switch rhs.type {
             case .v4: return false
             case .v6:
-                let llo = lhs.data[1..<9].withUnsafeBytes({
-                    let u64 = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
-                    return Self.systemIsLittleEndian ? u64.byteSwapped : u64
-                })
-                let rlo = rhs.data[1..<9].withUnsafeBytes({
-                    let u64 = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
-                    return Self.systemIsLittleEndian ? u64.byteSwapped : u64
-                })
-                if llo < rlo {
+                if lhs.ipv6lhs < rhs.ipv6lhs {
                     return true
                 }
-                else if llo > rlo {
+                else if rhs.ipv6lhs < lhs.ipv6lhs {
                     return false
                 }
-
-                
-                let lhi = lhs.data[9..<17].withUnsafeBytes({
-                    let u64 = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
-                    return Self.systemIsLittleEndian ? u64.byteSwapped : u64
-                })
-                let rhi = rhs.data[9..<17].withUnsafeBytes({
-                    let u64 = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
-                    return Self.systemIsLittleEndian ? u64.byteSwapped : u64
-                })
-                return lhi < rhi
+                else {
+                    if lhs.ipv6rhs < rhs.ipv6rhs {
+                        return true
+                    }
+                    else {
+                        return false
+                    }
+                }
             }
         }
     }
@@ -222,45 +234,118 @@ extension IPAddress : CustomStringConvertible {
     public var description: String {
         switch type {
         case .v4:
-            return data[1...].map({ $0.description }).joined(separator: ".")
+            if Self.systemIsLittleEndian {
+                return withUnsafeBytes(of: sysendianIpv4, { Array($0) })
+                    .reversed()
+                    .map({ $0.description })
+                    .joined(separator: ".")
+            }
+            else {
+                return withUnsafeBytes(of: sysendianIpv4, { Array($0) })
+                    .reversed()
+                    .map({ $0.description })
+                    .joined(separator: ".")
+            }
         case .v6:
-            return data[1...].withUnsafeBytes({
-                var tmp:[String] = []
-                for i in stride(from: $0.startIndex, to: $0.endIndex, by: 2) {
-                    let u16 = ($0.baseAddress! + i).assumingMemoryBound(to: UInt16.self).pointee
-                    tmp.append(String(Self.systemIsLittleEndian ? u16.byteSwapped : u16, radix: 16))
-                }
-                return tmp.joined(separator: ":")
-            })
+            if Self.systemIsLittleEndian {
+                let uint16bytes:[UInt16] = [
+                        UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
+                        UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
+                        UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
+                        UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
+                        
+                        UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
+                        UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
+                        UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
+                        UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
+                ]
+                return uint16bytes.map({ String($0, radix: 16) }).joined(separator: ":")
+            }
+            else {
+                fatalError("not implemented")
+//                return (withUnsafeBytes(of: ipv6lhs, { Array($0) }) + withUnsafeBytes(of: ipv6rhs, { Array($0) }))
+//                    .map({ $0.description })
+//                    .joined(separator: ":")
+            }
         }
     }
 }
 extension IPAddress : CustomDebugStringConvertible {
     public var debugDescription: String {
-        switch type {
-        case .v4:
-            return description + "/\(cidr.bits)"
-        case .v6:
-            return description + "/\(cidr.bits)"
-        }
+        return description + "/\(cidr.bits)"
     }
 }
 extension IPAddress {
-    public var rawAddressBytes:Data { return data[1...] }
+    public var networkOrderedAddressBytes:[UInt8] {
+        switch type {
+        case .v4:
+            if Self.systemIsLittleEndian {
+                return [
+                    UInt8((sysendianIpv4 & 0xff000000)>>24),
+                    UInt8((sysendianIpv4 & 0x00ff0000)>>16),
+                    UInt8((sysendianIpv4 & 0x0000ff00)>>8),
+                    UInt8(sysendianIpv4  & 0x000000ff)
+                ]
+            }
+            else {
+                return [
+                    UInt8(sysendianIpv4  & 0x000000ff),
+                    UInt8((sysendianIpv4 & 0x0000ff00)>>8),
+                    UInt8((sysendianIpv4 & 0x00ff0000)>>16),
+                    UInt8((sysendianIpv4 & 0xff000000)>>24)
+                ]
+            }
+        case .v6:
+            if Self.systemIsLittleEndian {
+                return [
+                    UInt8((ipv6lhs & 0xff00000000000000)>>56),
+                    UInt8((ipv6lhs & 0x00ff000000000000)>>48),
+                    UInt8((ipv6lhs & 0x0000ff0000000000)>>40),
+                    UInt8((ipv6lhs & 0x000000ff00000000)>>32),
+                    UInt8((ipv6lhs & 0x00000000ff000000)>>24),
+                    UInt8((ipv6lhs & 0x0000000000ff0000)>>16),
+                    UInt8((ipv6lhs & 0x000000000000ff00)>>8),
+                    UInt8((ipv6lhs & 0x00000000000000ff)>>0),
+
+                    UInt8((ipv6rhs & 0xff00000000000000)>>56),
+                    UInt8((ipv6rhs & 0x00ff000000000000)>>48),
+                    UInt8((ipv6rhs & 0x0000ff0000000000)>>40),
+                    UInt8((ipv6rhs & 0x000000ff00000000)>>32),
+                    UInt8((ipv6rhs & 0x00000000ff000000)>>24),
+                    UInt8((ipv6rhs & 0x0000000000ff0000)>>16),
+                    UInt8((ipv6rhs & 0x000000000000ff00)>>8),
+                    UInt8((ipv6rhs & 0x00000000000000ff)>>0)
+                ]
+            }
+            else {
+                return [
+                    UInt8((ipv6lhs & 0x00000000000000ff)),
+                    UInt8((ipv6lhs & 0x000000000000ff00)>>8),
+                    UInt8((ipv6lhs & 0x0000000000ff0000)>>16),
+                    UInt8((ipv6lhs & 0x00000000ff000000)>>24),
+                    UInt8((ipv6lhs & 0x000000ff00000000)>>32),
+                    UInt8((ipv6lhs & 0x0000ff0000000000)>>40),
+                    UInt8((ipv6lhs & 0x00ff000000000000)>>48),
+                    UInt8((ipv6lhs & 0xff00000000000000)>>56),
+
+                    UInt8((ipv6rhs & 0x00000000000000ff)),
+                    UInt8((ipv6rhs & 0x000000000000ff00)>>8),
+                    UInt8((ipv6rhs & 0x0000000000ff0000)>>16),
+                    UInt8((ipv6rhs & 0x00000000ff000000)>>24),
+                    UInt8((ipv6rhs & 0x000000ff00000000)>>32),
+                    UInt8((ipv6rhs & 0x0000ff0000000000)>>40),
+                    UInt8((ipv6rhs & 0x00ff000000000000)>>48),
+                    UInt8((ipv6rhs & 0xff00000000000000)>>56),
+                ]
+            }
+        }
+    }
+    public var rawAddressBytes:Data {
+        return Data(networkOrderedAddressBytes)
+    }
     private var ipv4rawValue:UInt32? {
         guard cidr.bits <= 32, type == .v4 else { return nil }
-        return data[1...].withUnsafeBytes({
-            let u32 = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
-            return Self.systemIsLittleEndian ? u32.byteSwapped : u32
-        })
-    }
-    /// A Boolean value indicating whether this is an ipv4 address.
-    public var isv4:Bool {
-        (data[0] & 0b11) == IPAddrType.v4.rawValue
-    }
-    /// A Boolean value indicating whether this is an ipv6 address.
-    public var isv6:Bool {
-        (data[0] & 0b11) == IPAddrType.v6.rawValue
+        return Self.systemIsLittleEndian ? sysendianIpv4 : sysendianIpv4.byteSwapped
     }
     /// Returns ip address's cidr mask binary representation as String
     public var cidrBitMaskDescription:String {
@@ -271,8 +356,8 @@ extension IPAddress {
     /// A Boolean value indicating whether this ip address is a loopback address
     public var isLoopbackAddress:Bool {
         switch type {
-        case .v4: return (2130706432...2147483647).contains(ipv4rawValue!)
-        case .v6: return data == Data([UInt8(1),0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1])
+        case .v4: return (2130706432...2147483647).contains(sysendianIpv4)
+        case .v6: return networkOrderedAddressBytes == [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]
         }
     }
     /// Network address of the network this ip address belongs to
@@ -282,10 +367,7 @@ extension IPAddress {
     /// the corresponding network.
     public var networkAddress:IPAddress? {
         let cb = cidr.bytes
-        switch type {
-        case .v4: return IPAddress(data[1] & cb[0], data[2] & cb[1], data[3] & cb[2], data[4] & cb[3], cidr: cidr.bits)!
-        case .v6: return IPAddress(data: Data(zip(data[1...], cb).map({ $0 & $1 })), cidr: cidr.bits)
-        }
+        return IPAddress(zip(networkOrderedAddressBytes, cb).map({ $0 & $1 }), cidr: cidr.bits)
     }
     /// Router address of the network this ip address belongs to
     ///
@@ -298,23 +380,18 @@ extension IPAddress {
             guard cidr.bits != 32, let netAddr = networkAddress else {
                 return nil
             }
-            guard netAddr.ipv4rawValue != UInt32.max else {
-                return netAddr
-            }
-            guard let rawNa = netAddr.ipv4rawValue else {
-                return nil
-            }
-            return IPAddress(rawNa + 1, cidr: cidr.bits)
+            guard netAddr.sysendianIpv4 != UInt32.max else { return netAddr }
+            return IPAddress(netAddr.sysendianIpv4 + 1, cidr: cidr.bits)
         case .v6:
-            guard cidr.bits != 128, var netAddr = networkAddress?.data else {
+            guard cidr.bits != 128, var netAddrBytes = networkAddress?.networkOrderedAddressBytes else {
                 return nil
             }
-            for i in stride(from: 16, through: 1, by: -1) {
-                guard netAddr[i] != 255 else { continue }
-                netAddr[i] = netAddr[i] + 1
+            for i in stride(from: 15, through: 0, by: -1) {
+                guard netAddrBytes[i] != 255 else { continue }
+                netAddrBytes[i] = netAddrBytes[i] + 1
                 break
             }
-            return IPAddress(data: netAddr[1...], cidr: cidr.bits)
+            return IPAddress(netAddrBytes, cidr: cidr.bits)
         }
     }
     /// Broadcast address of the network this ip address belongs to
@@ -325,18 +402,25 @@ extension IPAddress {
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
-            guard cidr.bits != 32, let rawValue = networkAddress?.ipv4rawValue else {
+            guard cidr.bits != 32, let rawValue = networkAddress else {
                 return nil
             }
-            let last = rawValue + UInt32(cidr.hostCount - 1)
-            return IPAddress(last, cidr: networkAddress!.cidr.bits)
+            let last = rawValue.sysendianIpv4 + UInt32(cidr.hostCount - 1)
+            return IPAddress(last, cidr: rawValue.cidr.bits)
         case .v6:
             guard cidr.bits != 128, let na = networkAddress else {
                 return nil
             }
-            let orEd = Data(zip(data[1...], cidr.bytes.map({ ~$0 })).map { $0 | $1 })
-            return IPAddress(data: orEd, cidr: na.cidr.bits)
+            let orEd = zip(networkOrderedAddressBytes, cidr.bytes.map({ ~$0 })).map { $0 | $1 }
+            return IPAddress(orEd, cidr: na.cidr.bits)
         }
+    }
+    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int) {
+        self.type = .v6
+        self.sysendianIpv4 = 0
+        self.ipv6lhs = lhs
+        self.ipv6rhs = rhs
+        self.cidr = CIDR(for: .v6, bits: bits)
     }
     /// A boolean value indicating wheter this ip address contains the other ip address
     ///
@@ -398,57 +482,67 @@ extension IPAddress {
     }
     /// Initializes an ipv4 address
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8) {
-        let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
-        self.data = Data(u8)
         self.cidr = CIDR(for: .v4, bits: CIDR.validV4Range.upperBound)
         self.type = .v4
         self.sysendianIpv4 = Self.systemIsLittleEndian ?
         UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
         UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
+        self.ipv6rhs = 0
+        self.ipv6lhs = 0
     }
     /// Initializes an ipv4 address
-    public init?(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
-        guard CIDR.validV4Range.contains(bits) else {
-            return nil
-        }
-        let u8 = [IPAddrType.v4.rawValue, a, b, c, d]
-        self.data = Data(u8)
+    public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
         self.cidr = CIDR(for: .v4, bits: bits)
         self.type = .v4
         self.sysendianIpv4 = Self.systemIsLittleEndian ?
         UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
         UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
+        self.ipv6rhs = 0
+        self.ipv6lhs = 0
     }
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
         self.cidr = CIDR(for: .v6, bits: CIDR.validV6Range.upperBound)
         if Self.systemIsLittleEndian {
-            self.data = Data([IPAddrType.v6.rawValue & 0b11] +
-                             [a.byteSwapped, b.byteSwapped, c.byteSwapped, d.byteSwapped,
-                              e.byteSwapped, f.byteSwapped, g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) }))
+            self.ipv6rhs =
+            UInt64(h) | UInt64(g)<<16 |
+            UInt64(f)<<32 | UInt64(e)<<48
+            self.ipv6lhs =
+            UInt64(d) | UInt64(c)<<16 |
+            UInt64(b)<<32 | UInt64(a)<<48
         }
         else {
-            self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
+            self.ipv6rhs =
+            UInt64(a.byteSwapped) | UInt64(b.byteSwapped)<<16 |
+            UInt64(c.byteSwapped)<<32 | UInt64(d.byteSwapped)<<48
+            self.ipv6lhs =
+            UInt64(e.byteSwapped) | UInt64(f.byteSwapped)<<16 |
+            UInt64(g.byteSwapped)<<32 | UInt64(h.byteSwapped)<<48
         }
         self.type = .v6
         self.sysendianIpv4 = 0
     }
     /// Initializes an ipv6 address
-    public init?(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
-        guard CIDR.validV6Range.contains(bits) else {
-            return nil
-        }
+    public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
         self.cidr = CIDR(for: .v6, bits: bits)
         if Self.systemIsLittleEndian {
-            self.data = Data([IPAddrType.v6.rawValue & 0b11] +
-                             [a.byteSwapped, b.byteSwapped, c.byteSwapped, d.byteSwapped,
-                              e.byteSwapped, f.byteSwapped, g.byteSwapped, h.byteSwapped].withUnsafeBytes({ Array($0) }))
+            self.ipv6rhs =
+            UInt64(h) | UInt64(g)<<16 |
+            UInt64(f)<<32 | UInt64(e)<<48
+            self.ipv6lhs =
+            UInt64(d) | UInt64(c)<<16 |
+            UInt64(b)<<32 | UInt64(a)<<48
         }
         else {
-            self.data = Data([IPAddrType.v6.rawValue & 0b11] + [a, b, c, d, e, f, g, h].withUnsafeBytes({ Array($0) }))
+            self.ipv6rhs =
+            UInt64(a.byteSwapped) | UInt64(b.byteSwapped)<<16 |
+            UInt64(c.byteSwapped)<<32 | UInt64(d.byteSwapped)<<48
+            self.ipv6lhs =
+            UInt64(e.byteSwapped) | UInt64(f.byteSwapped)<<16 |
+            UInt64(g.byteSwapped)<<32 | UInt64(h.byteSwapped)<<48
         }
-        self.type = .v6
         self.sysendianIpv4 = 0
+        self.type = .v6
     }
     /// Initializes an ipv4 or ipv6 address from Data
     public init?(data:Data, cidr bits:Int? = nil) {
@@ -458,20 +552,16 @@ extension IPAddress {
             guard CIDR.validV4Range.contains(b) else {
                 return nil
             }
-            self.cidr = CIDR(for: .v4, bits: b)
-            self.data = [IPAddrType.v4.rawValue & 0b11] + data
-            self.type = .v4
+            self.init(data.withUnsafeBytes({ Array($0) }), cidr: b)
         case 16:
             let b = bits ?? 128
             guard CIDR.validV6Range.contains(b) else {
                 return nil
             }
-            self.cidr = CIDR(for: .v6, bits: b)
-            self.data = [IPAddrType.v6.rawValue & 0b11] + data
-            self.type = .v6
+            self.init(data.withUnsafeBytes({ Array($0) }), cidr: b)
+
         default: return nil
         }
-        self.sysendianIpv4 = 0
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
@@ -505,16 +595,35 @@ public struct IPAddressIterator : IteratorProtocol {
     mutating public func next() -> Element? {
         switch address.type {
         case .v4:
-            let u32 = address.rawAddressBytes.withUnsafeBytes({
-                let p = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
-                return isLittleEndian ? p.byteSwapped : p
-            })
+//            let u32 = address.rawAddressBytes.withUnsafeBytes({
+//                let p = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
+//                return isLittleEndian ? p.byteSwapped : p
+//            })
             guard address <= limit else { return nil }
             defer {
-                self.address = IPAddress(u32 + 1, cidr: address.cidr.bits)
+                self.address = IPAddress(address.sysendianIpv4 + 1, cidr: address.cidr.bits)
             }
             return self.address
         case .v6:
+            guard address <= limit else { return nil }
+            if address.ipv6rhs == UInt64.max {
+                if address.ipv6lhs == UInt64.max {
+                    return nil
+                }
+                else {
+                    defer {
+                        self.address = IPAddress(address.ipv6lhs + 1, 0, cidr: address.cidr.bits)
+                    }
+                    return self.address
+                }
+            }
+            else {
+                defer {
+                    self.address = IPAddress(address.ipv6lhs, address.ipv6rhs + 1, cidr: address.cidr.bits)
+                }
+                return self.address
+            }
+            /*
             let hi = address.rawAddressBytes.withUnsafeBytes({
                 let p = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
                 return isLittleEndian ? p.byteSwapped : p
@@ -553,7 +662,7 @@ public struct IPAddressIterator : IteratorProtocol {
                 }
             })
 
-            // Note: We could us (below)
+            // Note: We could use (below)
             // let a = IPAddress(data: data[1...], cidr: address.cidr.bits)!
             // as above init will never fail because address is a valid ipv6
             // address.
@@ -562,7 +671,7 @@ public struct IPAddressIterator : IteratorProtocol {
             defer {
                 self.address = nextAddress
             }
-            return self.address
+            return self.address*/
         }
     }
 }
