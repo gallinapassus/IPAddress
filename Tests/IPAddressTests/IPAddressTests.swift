@@ -1083,12 +1083,54 @@ final class PerformanceTests : XCTestCase {
         }
         return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
+    func perf_ipv4_iterator(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, cidr: 10)
+        let count = UInt64(ip.cidr.hostCount)
+        for i in 1...iterations {
+            var iterator = IPAddressIterator(address: ip)
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = iterator.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            tarr.append(Double(t1 - t0))
+            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_iterator(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 105)
+        let count = UInt64(ip.cidr.hostCount)
+        for i in 1...iterations {
+            var iterator = IPAddressIterator(address: ip)
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = iterator.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
+            tarr.append(Double(t1 - t0))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    // system_profiler SPSoftwareDataType SPHardwareDataType
+    func spec() -> String {
+        var elements:[String] = []
+        let info = ProcessInfo.processInfo
+        elements.append("Operating system \(info.operatingSystemVersionString)")
+        elements.append("\(info.processorCount) processors")
+        elements.append("\(info.physicalMemory) bytes of memory")
+        return elements.joined(separator: ", ")
+    }
     func runit(name:String, _ f: (Int)->(Double,UInt64)) {
         print("##", name)
+        print("### \(spec())")
+        #if DEBUG
+        print("### Build: Debug")
+        #else
+        print("### Build: Release")
+        #endif
         print("```")
         let (avg, count) = f(3)
         print("==============================================")
-        print("Average duration (µs):", µs(avg))
         print("Average:", rate(avg, iterations: count))
         print("```")
     }
