@@ -165,14 +165,24 @@ final class IPAddressTests: XCTestCase {
     }
     func test_isLoopbackAddress() {
         do { // v4
+            XCTAssertTrue(IPAddress(127, 0, 0, 0).isLoopbackAddress)
             XCTAssertTrue(IPAddress(127, 0, 0, 1).isLoopbackAddress)
-            XCTAssertTrue(IPAddress(127, 0, 0, 2).isLoopbackAddress)
             XCTAssertTrue(IPAddress(127, 255, 255, 255).isLoopbackAddress)
             XCTAssertFalse(IPAddress(128, 0, 0, 1).isLoopbackAddress)
         }
         do { // v6
             XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopbackAddress)
             XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 2).isLoopbackAddress)
+        }
+    }
+    func test_isUnspecifiedAddress() {
+        do { // v4
+            XCTAssertTrue(IPAddress(0, 0, 0, 0).isUnspecifiedAddress)
+            XCTAssertFalse(IPAddress(0, 0, 0, 1).isUnspecifiedAddress)
+        }
+        do { // v6
+            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isUnspecifiedAddress)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isUnspecifiedAddress)
         }
     }
     func test_routerAddress() {
