@@ -12,26 +12,6 @@ public class CIDR : Codable {
     public let bits:Int
     /// Ip address type associated to this cidr
     private (set) public var type:IPAddress.IPAddrType
-    /// Cidr bytes as Data
-    public lazy var bytes:Data = {
-        let validRange:ClosedRange<Int>
-        switch self.type {
-        case .v4:
-            validRange = Self.validV4Range
-        case .v6:
-            validRange = Self.validV6Range
-        }
-        let bitsByteCount = bits / 8
-        var mask:Data = Data(repeating: 255, count: bitsByteCount)
-        let tailCount = (validRange.upperBound / 8) - mask.count
-        let tail = Data(repeating: 0, count: tailCount)
-        mask.append(tail)
-        let u8:UInt8 = ~(0xff >> (bits % 8))
-        if (bits % 8) != 0 {
-            mask[bitsByteCount] = u8
-        }
-        return mask
-    }()
     /// A boolean value indicating wheter this cidr denotes a single endpoint
     public lazy var isSingleEndPoint:Bool = {
         switch type {
