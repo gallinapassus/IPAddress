@@ -283,13 +283,57 @@ extension IPAddress {
 }
 extension IPAddress {
     /// A Boolean value indicating whether this ip address is an unspecified address
-    public var isUnspecifiedAddress:Bool {
+    public var isUnspecified:Bool {
         type == .v4 ? sysendianIpv4 == 0 : ipv6lhs == 0 && ipv6rhs == 0
     }
     /// A Boolean value indicating whether this ip address is a loopback address
-    public var isLoopbackAddress:Bool {
+    public var isLoopback:Bool {
         type == .v4 ? (2130706432...2147483647).contains(sysendianIpv4) : ipv6lhs == 0 && ipv6rhs == 1
     }
+    /// A Boolean value indicating whether this ip address is a non routable broadcast address
+    public var isBroadcast:Bool {
+        return type == .v4 ?
+        sysendianIpv4 == 0xffffffff
+        :
+        ipv6lhs == ~0 && ipv6rhs == ~0
+    }
+    public var isPrivate:Bool {
+        return type == .v4 ?
+        IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
+        IPAddress(172, 168, 0, 0, cidr: 12).contains(self) ||
+        IPAddress(10, 0, 0, 0, cidr: 8).contains(self)
+        :
+        IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)
+    }
+    public var isLinkLocal:Bool {
+        return type == .v4 ?
+        IPAddress(169, 254, 0, 0, cidr: 16).contains(self)
+        :
+        IPAddress(0xfe80000000000000, 0, cidr: 10).contains(self)
+    }
+    public var isGlobal:Bool {
+        self.isUnspecified == false &&
+        self.isPrivate == false &&
+        self.isLoopback == false &&
+        self.isLinkLocal == false &&
+        self.isDocumentation == false &&
+        self.isBroadcast == false
+    }
+    public var isMulticast:Bool {
+        return type == .v4 ?
+        IPAddress(224, 0, 0, 0, cidr: 4).contains(self)
+        :
+        IPAddress(0xff00000000000000, 0, cidr: 8).contains(self)
+    }
+    public var isDocumentation:Bool {
+        return type == .v4 ?
+        IPAddress(192, 0, 2, 0, cidr: 24).contains(self) ||
+        IPAddress(198, 51, 100, 0, cidr: 24).contains(self) ||
+        IPAddress(203, 0, 113, 0, cidr: 24).contains(self)
+        :
+        IPAddress(0x20010db800000000, 0, cidr: 32).contains(self)
+    }
+    // MARK: -
     public var networkOrderedAddressBytes:[UInt8] {
         switch type {
         case .v4:
@@ -422,20 +466,12 @@ extension IPAddress {
             return IPAddress(orEd, cidr: na.cidr.bits)
         }
     }
-    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
-        self.type = .v6
-        self.sysendianIpv4 = 0
-        self.ipv6lhs = lhs
-        self.ipv6rhs = rhs
-        self.cidr = CIDR(for: .v6, bits: bits)
-    }
     /// A boolean value indicating wheter this ip address contains the other ip address
     ///
     /// - Returns: Returns false when address types don't match.
     /// In case `self` or `other` are network addresses, returns true only if
     /// `self` contains `other` entirely.
     public func contains(_ other:IPAddress) -> Bool {
-        
         guard type == other.type else {
             return false
         }
@@ -449,14 +485,13 @@ extension IPAddress {
 
             switch type {
             case .v4:
-                guard let na = networkAddress?.ipv4rawValue,
-                      let ba = broadcastAddress?.ipv4rawValue,
-                      let oa = other.networkAddress?.ipv4rawValue else {
+                guard let na = networkAddress?.sysendianIpv4,
+                      let ba = broadcastAddress?.sysendianIpv4,
+                      let oa = other.networkAddress?.sysendianIpv4 else {
                     return false
                 }
                 let myRange = na...ba
-                return myRange.contains(oa) &&
-                myRange.contains(other.broadcastAddress!.ipv4rawValue!)
+                return myRange.contains(oa) && myRange.contains(other.broadcastAddress!.sysendianIpv4)
             case .v6:
                 guard let ona = other.networkAddress,
                       let na = networkAddress,
@@ -473,12 +508,11 @@ extension IPAddress {
         switch type {
         case .v4:
             // both are same type
-            guard let oa = other.ipv4rawValue,
-                  let na = networkAddress?.ipv4rawValue,
-                  let ba = broadcastAddress?.ipv4rawValue else {
+            guard let na = networkAddress?.sysendianIpv4,
+                  let ba = broadcastAddress?.sysendianIpv4 else {
                 return false
             }
-            return oa >= na && oa <= ba
+            return other.sysendianIpv4 >= na && other.sysendianIpv4 <= ba
         case .v6:
             // both are same type
             guard let na = networkAddress, let ba = broadcastAddress else {
@@ -486,6 +520,14 @@ extension IPAddress {
             }
             return other >= na && other <= ba
         }
+    }
+    /// Initializes an ipv6 address
+    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
+        self.type = .v6
+        self.sysendianIpv4 = 0
+        self.ipv6lhs = lhs
+        self.ipv6rhs = rhs
+        self.cidr = CIDR(for: .v6, bits: bits)
     }
     /// Initializes an ipv4 address
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8) {
