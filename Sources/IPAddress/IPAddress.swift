@@ -25,7 +25,84 @@ public struct IPAddress : Codable {
 
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidr:CIDR
-
+    public let networkMask:[UInt8]
+    @inline(__always)
+    private static func genv4MaskBytes(bits:Int) -> [UInt8] {
+        let lhs = UInt32.max<<(32-bits)
+        if Self.systemIsLittleEndian {
+            return [
+                UInt8((lhs & 0xff000000)>>24),
+                UInt8((lhs & 0x00ff0000)>>16),
+                UInt8((lhs & 0x0000ff00)>>8),
+                UInt8((lhs & 0x000000ff)),
+            ]
+        }
+        else {
+            return [
+                UInt8((lhs & 0x000000ff)),
+                UInt8((lhs & 0x0000ff00)>>8),
+                UInt8((lhs & 0x00ff0000)>>16),
+                UInt8((lhs & 0xff000000)>>24),
+            ]
+        }
+    }
+    @inline(__always)
+    private static func genv6MaskBytes(bits:Int) -> [UInt8] {
+        var lhs:UInt64 = UInt64.max
+        var rhs:UInt64 = UInt64.max
+        let f = 128 - bits
+        if f > 64 {
+            rhs = 0
+            lhs = lhs<<(f - 64)
+        }
+        else {
+            rhs = rhs<<f
+        }
+        let returnValue:[UInt8]
+        if Self.systemIsLittleEndian {
+            returnValue =  [
+                UInt8((lhs & 0xff00000000000000)>>56),
+                UInt8((lhs & 0x00ff000000000000)>>48),
+                UInt8((lhs & 0x0000ff0000000000)>>40),
+                UInt8((lhs & 0x000000ff00000000)>>32),
+                UInt8((lhs & 0x00000000ff000000)>>24),
+                UInt8((lhs & 0x0000000000ff0000)>>16),
+                UInt8((lhs & 0x000000000000ff00)>>8 ),
+                UInt8((lhs & 0x00000000000000ff)),
+                
+                UInt8((rhs & 0xff00000000000000)>>56),
+                UInt8((rhs & 0x00ff000000000000)>>48),
+                UInt8((rhs & 0x0000ff0000000000)>>40),
+                UInt8((rhs & 0x000000ff00000000)>>32),
+                UInt8((rhs & 0x00000000ff000000)>>24),
+                UInt8((rhs & 0x0000000000ff0000)>>16),
+                UInt8((rhs & 0x000000000000ff00)>>8 ),
+                UInt8(rhs & 0x00000000000000ff),
+            ]
+        }
+        else {
+            returnValue =  [
+                UInt8((lhs & 0x00000000000000ff)),
+                UInt8((lhs & 0x000000000000ff00)>>8 ),
+                UInt8((lhs & 0x0000000000ff0000)>>16),
+                UInt8((lhs & 0x00000000ff000000)>>24),
+                UInt8((lhs & 0x000000ff00000000)>>32),
+                UInt8((lhs & 0x0000ff0000000000)>>40),
+                UInt8((lhs & 0x00ff000000000000)>>48),
+                UInt8((lhs & 0xff00000000000000)>>56),
+                
+                UInt8(rhs & 0x00000000000000ff),
+                UInt8((rhs & 0x000000000000ff00)>>8 ),
+                UInt8((rhs & 0x0000000000ff0000)>>16),
+                UInt8((rhs & 0x00000000ff000000)>>24),
+                UInt8((rhs & 0x000000ff00000000)>>32),
+                UInt8((rhs & 0x0000ff0000000000)>>40),
+                UInt8((rhs & 0x00ff000000000000)>>48),
+                UInt8((rhs & 0xff00000000000000)>>56),
+            ]
+        }
+        return returnValue
+    }
     /// Returns an enumeration value describing the contained ip address type
     public let type:IPAddrType
 
@@ -41,6 +118,7 @@ public struct IPAddress : Codable {
         self.sysendianIpv4 = u32
         self.ipv6rhs = 0
         self.ipv6lhs = 0
+        self.networkMask = Self.genv4MaskBytes(bits: bits)
     }
 
     /// Initializes an ipv4 or ipv6 address
@@ -51,6 +129,7 @@ public struct IPAddress : Codable {
         switch bytes.count {
         case 4:
             let b = bits ?? 32
+            self.networkMask = Self.genv4MaskBytes(bits: b)
             self.cidr = CIDR(for: .v4, bits: b)
             self.type = .v4
             self.sysendianIpv4 = Self.systemIsLittleEndian ?
@@ -60,6 +139,7 @@ public struct IPAddress : Codable {
             self.ipv6lhs = 0
         case 16:
             let b = bits ?? 128
+            self.networkMask = Self.genv6MaskBytes(bits: b)
             self.cidr = CIDR(for: .v6, bits: b)
             self.type = .v6
             self.sysendianIpv4 = 0
@@ -283,13 +363,57 @@ extension IPAddress {
 }
 extension IPAddress {
     /// A Boolean value indicating whether this ip address is an unspecified address
-    public var isUnspecifiedAddress:Bool {
+    public var isUnspecified:Bool {
         type == .v4 ? sysendianIpv4 == 0 : ipv6lhs == 0 && ipv6rhs == 0
     }
     /// A Boolean value indicating whether this ip address is a loopback address
-    public var isLoopbackAddress:Bool {
+    public var isLoopback:Bool {
         type == .v4 ? (2130706432...2147483647).contains(sysendianIpv4) : ipv6lhs == 0 && ipv6rhs == 1
     }
+    /// A Boolean value indicating whether this ip address is a non routable broadcast address
+    public var isBroadcast:Bool {
+        return type == .v4 ?
+        sysendianIpv4 == 0xffffffff
+        :
+        ipv6lhs == ~0 && ipv6rhs == ~0
+    }
+    public var isPrivate:Bool {
+        return type == .v4 ?
+        IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
+        IPAddress(172, 168, 0, 0, cidr: 12).contains(self) ||
+        IPAddress(10, 0, 0, 0, cidr: 8).contains(self)
+        :
+        IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)
+    }
+    public var isLinkLocal:Bool {
+        return type == .v4 ?
+        IPAddress(169, 254, 0, 0, cidr: 16).contains(self)
+        :
+        IPAddress(0xfe80000000000000, 0, cidr: 10).contains(self)
+    }
+    public var isGlobal:Bool {
+        self.isUnspecified == false &&
+        self.isPrivate == false &&
+        self.isLoopback == false &&
+        self.isLinkLocal == false &&
+        self.isDocumentation == false &&
+        self.isBroadcast == false
+    }
+    public var isMulticast:Bool {
+        return type == .v4 ?
+        IPAddress(224, 0, 0, 0, cidr: 4).contains(self)
+        :
+        IPAddress(0xff00000000000000, 0, cidr: 8).contains(self)
+    }
+    public var isDocumentation:Bool {
+        return type == .v4 ?
+        IPAddress(192, 0, 2, 0, cidr: 24).contains(self) ||
+        IPAddress(198, 51, 100, 0, cidr: 24).contains(self) ||
+        IPAddress(203, 0, 113, 0, cidr: 24).contains(self)
+        :
+        IPAddress(0x20010db800000000, 0, cidr: 32).contains(self)
+    }
+    // MARK: -
     public var networkOrderedAddressBytes:[UInt8] {
         switch type {
         case .v4:
@@ -362,19 +486,18 @@ extension IPAddress {
         return Self.systemIsLittleEndian ? sysendianIpv4 : sysendianIpv4.byteSwapped
     }
     /// Returns ip address's cidr mask binary representation as String
-    public var cidrBitMaskDescription:String {
-        mutating get {
-            cidr.bytes.map({ $0 == 0 ? String(repeating: "0", count: 8) : String($0, radix: 2) }).joined(separator: ":")
-        }
-    }
+//    public var cidrBitMaskDescription:String {
+//        mutating get {
+//            cidr.bytes.map({ $0 == 0 ? String(repeating: "0", count: 8) : String($0, radix: 2) }).joined(separator: ":")
+//        }
+//    }
     /// Network address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
     /// (is a single end point). Othervice returns network address of the network this ip belongs to with cidr set to
     /// the corresponding network.
     public var networkAddress:IPAddress? {
-        let cb = cidr.bytes
-        return IPAddress(zip(networkOrderedAddressBytes, cb).map({ $0 & $1 }), cidr: cidr.bits)
+        return IPAddress(zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidr.bits)
     }
     /// Router address of the network this ip address belongs to
     ///
@@ -409,25 +532,18 @@ extension IPAddress {
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
-            guard cidr.bits != 32, let rawValue = networkAddress else {
+            guard cidr.bits != 32, let networkAddress = networkAddress else {
                 return nil
             }
-            let last = rawValue.sysendianIpv4 + UInt32(cidr.hostCount - 1)
-            return IPAddress(last, cidr: rawValue.cidr.bits)
+            let last = networkAddress.sysendianIpv4 + UInt32(cidr.hostCount - 1)
+            return IPAddress(last, cidr: networkAddress.cidr.bits)
         case .v6:
             guard cidr.bits != 128, let na = networkAddress else {
                 return nil
             }
-            let orEd = zip(networkOrderedAddressBytes, cidr.bytes.map({ ~$0 })).map { $0 | $1 }
-            return IPAddress(orEd, cidr: na.cidr.bits)
+            let bytes = zip(networkOrderedAddressBytes, networkMask.map({ ~$0 })).map { $0 | $1 }
+            return IPAddress(bytes, cidr: na.cidr.bits)
         }
-    }
-    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
-        self.type = .v6
-        self.sysendianIpv4 = 0
-        self.ipv6lhs = lhs
-        self.ipv6rhs = rhs
-        self.cidr = CIDR(for: .v6, bits: bits)
     }
     /// A boolean value indicating wheter this ip address contains the other ip address
     ///
@@ -435,7 +551,6 @@ extension IPAddress {
     /// In case `self` or `other` are network addresses, returns true only if
     /// `self` contains `other` entirely.
     public func contains(_ other:IPAddress) -> Bool {
-        
         guard type == other.type else {
             return false
         }
@@ -449,22 +564,26 @@ extension IPAddress {
 
             switch type {
             case .v4:
-                guard let na = networkAddress?.ipv4rawValue,
-                      let ba = broadcastAddress?.ipv4rawValue,
-                      let oa = other.networkAddress?.ipv4rawValue else {
+                guard let na = networkAddress?.sysendianIpv4,
+                      let ba = broadcastAddress?.sysendianIpv4,
+                      let oa = other.networkAddress?.sysendianIpv4 else {
                     return false
                 }
                 let myRange = na...ba
-                return myRange.contains(oa) &&
-                myRange.contains(other.broadcastAddress!.ipv4rawValue!)
+                return myRange.contains(oa) && myRange.contains(other.broadcastAddress!.sysendianIpv4)
             case .v6:
                 guard let ona = other.networkAddress,
-                      let na = networkAddress,
-                      let oba = other.broadcastAddress,
+                      let na = networkAddress else {
+                    return false
+                }
+                guard ona >= na else {
+                    return false
+                }
+                guard let oba = other.broadcastAddress,
                       let ba = broadcastAddress else {
                     return false
                 }
-                return ona >= na && oba <= ba
+                return oba <= ba
             }
         }
         // "this ip address" is a network
@@ -473,19 +592,37 @@ extension IPAddress {
         switch type {
         case .v4:
             // both are same type
-            guard let oa = other.ipv4rawValue,
-                  let na = networkAddress?.ipv4rawValue,
-                  let ba = broadcastAddress?.ipv4rawValue else {
+            guard let na = networkAddress?.sysendianIpv4,
+                  let ba = broadcastAddress?.sysendianIpv4 else {
                 return false
             }
-            return oa >= na && oa <= ba
+            return other.sysendianIpv4 >= na && other.sysendianIpv4 <= ba
         case .v6:
             // both are same type
-            guard let na = networkAddress, let ba = broadcastAddress else {
+            guard let na = networkAddress else {
                 return false
             }
-            return other >= na && other <= ba
+            guard other >= na else {
+                return false
+            }
+            guard let ba = broadcastAddress else {
+                return false
+            }
+            return other <= ba
+//            guard let na = networkAddress, let ba = broadcastAddress else {
+//                return false
+//            }
+//            return other >= na && other <= ba
         }
+    }
+    /// Initializes an ipv6 address
+    internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
+        self.type = .v6
+        self.sysendianIpv4 = 0
+        self.ipv6lhs = lhs
+        self.ipv6rhs = rhs
+        self.cidr = CIDR(for: .v6, bits: bits)
+        self.networkMask = Self.genv6MaskBytes(bits: bits)
     }
     /// Initializes an ipv4 address
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8) {
@@ -496,6 +633,7 @@ extension IPAddress {
         UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
         self.ipv6rhs = 0
         self.ipv6lhs = 0
+        self.networkMask = Self.genv4MaskBytes(bits: CIDR.validV4Range.upperBound)
     }
     /// Initializes an ipv4 address
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
@@ -506,10 +644,12 @@ extension IPAddress {
         UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
         self.ipv6rhs = 0
         self.ipv6lhs = 0
+        self.networkMask = Self.genv4MaskBytes(bits: bits)
     }
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
         self.cidr = CIDR(for: .v6, bits: CIDR.validV6Range.upperBound)
+        self.networkMask = Self.genv6MaskBytes(bits: CIDR.validV6Range.upperBound)
         if Self.systemIsLittleEndian {
             self.ipv6rhs =
             UInt64(h) | UInt64(g)<<16 |
@@ -532,6 +672,7 @@ extension IPAddress {
     /// Initializes an ipv6 address
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
         self.cidr = CIDR(for: .v6, bits: bits)
+        self.networkMask = Self.genv6MaskBytes(bits: bits)
         if Self.systemIsLittleEndian {
             self.ipv6rhs =
             UInt64(h) | UInt64(g)<<16 |
@@ -572,14 +713,7 @@ extension IPAddress {
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
-        let a:UInt16 = 256
-        return withUnsafeBytes(of: a) { (ptr) -> Bool in
-            // 256 == 0x0100
-            // a+0:01       a+0:00
-            // a+1:00       a+1:01
-            // big-endian   little-endian
-            return ptr[0] < ptr[1] ? true : false
-        }
+        UInt16(256).littleEndian & 0x00ff == 0
     }
 }
 
@@ -589,9 +723,7 @@ public struct IPAddressIterator : IteratorProtocol {
     private (set) public var address:IPAddress
     private let limit:IPAddress
     private lazy var isLittleEndian = {
-        withUnsafeBytes(of: UInt16(256)) { (ptr) -> Bool in
-            return ptr[0] < ptr[1] ? true : false
-        }
+        UInt16(256).littleEndian & 0x00ff == 0
     }()
 
     public init(address:IPAddress) {
@@ -602,10 +734,6 @@ public struct IPAddressIterator : IteratorProtocol {
     mutating public func next() -> Element? {
         switch address.type {
         case .v4:
-//            let u32 = address.rawAddressBytes.withUnsafeBytes({
-//                let p = $0.baseAddress!.assumingMemoryBound(to: UInt32.self).pointee
-//                return isLittleEndian ? p.byteSwapped : p
-//            })
             guard address <= limit else { return nil }
             defer {
                 self.address = IPAddress(address.sysendianIpv4 + 1, cidr: address.cidr.bits)
@@ -630,55 +758,6 @@ public struct IPAddressIterator : IteratorProtocol {
                 }
                 return self.address
             }
-            /*
-            let hi = address.rawAddressBytes.withUnsafeBytes({
-                let p = $0.baseAddress!.assumingMemoryBound(to: UInt64.self).pointee
-                return isLittleEndian ? p.byteSwapped : p
-            })
-            let lo = address.rawAddressBytes.withUnsafeBytes({
-                let p = $0.baseAddress!.advanced(by: MemoryLayout<UInt64>.size).assumingMemoryBound(to: UInt64.self).pointee
-                return isLittleEndian ? p.byteSwapped : p
-            })
-            let newLo:UInt64
-            let newHi:UInt64
-            if lo < UInt64.max {
-                newLo = lo + 1
-                newHi = hi
-            }
-            else {
-                if hi < UInt64.max {
-                    newHi = hi + 1
-                    newLo = 0
-                }
-                else {
-                    // overflow
-                    return nil
-                }
-            }
-            var data = Data([address.type.rawValue])
-            withUnsafeBytes(of: isLittleEndian ? newHi.byteSwapped : newHi, {
-                for i in $0.indices {
-                    let foo = $0[i]
-                    data.append(foo)
-                }
-            })
-            withUnsafeBytes(of: isLittleEndian ? newLo.byteSwapped : newLo, {
-                for i in $0.indices {
-                    let foo = $0[i]
-                    data.append(foo)
-                }
-            })
-
-            // Note: We could use (below)
-            // let a = IPAddress(data: data[1...], cidr: address.cidr.bits)!
-            // as above init will never fail because address is a valid ipv6
-            // address.
-            guard let nextAddress = IPAddress(data: data[1...], cidr: address.cidr.bits) else { return nil }
-            guard address <= limit else { return nil }
-            defer {
-                self.address = nextAddress
-            }
-            return self.address*/
         }
     }
 }

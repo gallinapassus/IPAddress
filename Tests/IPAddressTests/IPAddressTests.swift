@@ -33,14 +33,14 @@ final class IPAddressTests: XCTestCase {
         do {
             // v6
             for (str, expected, _) in ipv6ParsingZoo {
-                print("IPAddress.init(\"\(str)\") => ", terminator: "")
+                //print("IPAddress.init(\"\(str)\") => ", terminator: "")
                 let initialized = IPAddress(str)
                 if expected == nil {
-                    print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
+                    //print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
                     XCTAssertNil(initialized)
                 }
                 else {
-                    print(initialized.debugDescription, initialized != nil ? "SUCCESS" : "FAILED")
+                    //print(initialized.debugDescription, initialized != nil ? "SUCCESS" : "FAILED")
                     XCTAssertEqual(initialized, expected)
                 }
             }
@@ -53,16 +53,16 @@ final class IPAddressTests: XCTestCase {
             let v4 = IPAddress(1, 2, 3, 4)
             XCTAssertEqual(v4.cidr.bits, 32)
             XCTAssertEqual(v4.type, .v4)
-            XCTAssertEqual(v4.isLoopbackAddress, false)
+            XCTAssertEqual(v4.isLoopback, false)
             XCTAssertEqual(v4.rawAddressBytes, Data([1, 2, 3, 4]))
             XCTAssertEqual(v4.networkAddress, IPAddress(1, 2, 3, 4))
-            XCTAssertEqual(IPAddress(0, 0, 0, 0).isLoopbackAddress, false)
-            XCTAssertEqual(IPAddress(126, 255, 255, 255).isLoopbackAddress, false)
-            XCTAssertEqual(IPAddress(127, 0, 0, 0).isLoopbackAddress, true)
-            XCTAssertEqual(IPAddress(127, 0, 0, 1).isLoopbackAddress, true)
-            XCTAssertEqual(IPAddress(127, 255, 255, 255).isLoopbackAddress, true)
-            XCTAssertEqual(IPAddress(128, 0, 0, 0).isLoopbackAddress, false)
-            XCTAssertEqual(IPAddress(255, 255, 255, 255).isLoopbackAddress, false)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0).isLoopback, false)
+            XCTAssertEqual(IPAddress(126, 255, 255, 255).isLoopback, false)
+            XCTAssertEqual(IPAddress(127, 0, 0, 0).isLoopback, true)
+            XCTAssertEqual(IPAddress(127, 0, 0, 1).isLoopback, true)
+            XCTAssertEqual(IPAddress(127, 255, 255, 255).isLoopback, true)
+            XCTAssertEqual(IPAddress(128, 0, 0, 0).isLoopback, false)
+            XCTAssertEqual(IPAddress(255, 255, 255, 255).isLoopback, false)
         }
         do {
             let v6 = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
@@ -70,10 +70,10 @@ final class IPAddressTests: XCTestCase {
             XCTAssertEqual(v6.type, .v6)
             XCTAssertEqual(v6.rawAddressBytes, Data([0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8]), "\(v6.rawAddressBytes.withUnsafeBytes({ Array($0) }))")
             XCTAssertEqual(v6.networkAddress, v6)
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isLoopbackAddress, false)
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopbackAddress, true)
-            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 2).isLoopbackAddress, false)
-            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255).isLoopbackAddress, false)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isLoopback, false)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopback, true)
+            XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 2).isLoopback, false)
+            XCTAssertEqual(IPAddress(255, 255, 255, 255, 255, 255, 255, 255).isLoopback, false)
         }
     }
     func test_networkOrderedAddressBytes() {
@@ -163,26 +163,144 @@ final class IPAddressTests: XCTestCase {
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65).rawAddressBytes)
         }
     }
-    func test_isLoopbackAddress() {
+    func test_isLoopback() {
         do { // v4
-            XCTAssertTrue(IPAddress(127, 0, 0, 0).isLoopbackAddress)
-            XCTAssertTrue(IPAddress(127, 0, 0, 1).isLoopbackAddress)
-            XCTAssertTrue(IPAddress(127, 255, 255, 255).isLoopbackAddress)
-            XCTAssertFalse(IPAddress(128, 0, 0, 1).isLoopbackAddress)
+            XCTAssertTrue(IPAddress(127, 0, 0, 0).isLoopback)
+            XCTAssertTrue(IPAddress(127, 0, 0, 1).isLoopback)
+            XCTAssertTrue(IPAddress(127, 255, 255, 255).isLoopback)
+            XCTAssertFalse(IPAddress(128, 0, 0, 1).isLoopback)
         }
         do { // v6
-            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopbackAddress)
-            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 2).isLoopbackAddress)
+            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopback)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 2).isLoopback)
         }
     }
-    func test_isUnspecifiedAddress() {
+    func test_isUnspecified() {
         do { // v4
-            XCTAssertTrue(IPAddress(0, 0, 0, 0).isUnspecifiedAddress)
-            XCTAssertFalse(IPAddress(0, 0, 0, 1).isUnspecifiedAddress)
+            XCTAssertTrue(IPAddress(0, 0, 0, 0).isUnspecified)
+            XCTAssertFalse(IPAddress(0, 0, 0, 1).isUnspecified)
         }
         do { // v6
-            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isUnspecifiedAddress)
-            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isUnspecifiedAddress)
+            XCTAssertTrue(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isUnspecified)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isUnspecified)
+        }
+    }
+    func test_isBroadcast() {
+        do { // v4
+            XCTAssertTrue(IPAddress(~0).isBroadcast)
+            XCTAssertTrue(IPAddress(~0, cidr: 16).isBroadcast)
+            XCTAssertFalse(IPAddress(0).isBroadcast)
+            XCTAssertFalse(IPAddress(0, cidr: 0).isBroadcast)
+        }
+        do { // v6
+            XCTAssertTrue(IPAddress(~0, ~0).isBroadcast)
+            XCTAssertTrue(IPAddress(~0, ~0, cidr: 64).isBroadcast)
+            XCTAssertFalse(IPAddress(0, 0).isBroadcast)
+            XCTAssertFalse(IPAddress(0, 0, cidr: 0).isBroadcast)
+        }
+    }
+    func test_isGlobal() {
+        do { // v4
+            XCTAssertTrue(IPAddress(0, 0, 0, 1, cidr: 16).isGlobal)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0).isGlobal)
+            XCTAssertFalse(IPAddress(192, 168, 0, 0, cidr: 16).isGlobal)
+            XCTAssertFalse(IPAddress(169, 254, 0, 0, cidr: 16).isGlobal)
+        }
+        do { // v6
+            print(IPAddress(0, 2, cidr: 16).compactDebugDescription)
+            XCTAssertTrue(IPAddress(1, 0, cidr: 16).isGlobal)
+            XCTAssertTrue(IPAddress(0, 2, cidr: 16).isGlobal)
+            XCTAssertFalse(IPAddress(0xfd00000000000000, 0).isGlobal)
+            XCTAssertFalse(IPAddress(0xfe80000000000000, 0).isGlobal)
+            XCTAssertFalse(IPAddress(~0, ~0).isGlobal)
+            XCTAssertFalse(IPAddress(0, 0).isGlobal)
+        }
+    }
+    func test_isPrivate() {
+        do { // v4
+            XCTAssertTrue(IPAddress(192, 168, 0, 0, cidr: 16).isPrivate)
+            XCTAssertTrue(IPAddress(192, 168, 0, 0).isPrivate)
+            XCTAssertTrue(IPAddress(192, 168, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(192, 167, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(192, 169, 0, 9).isPrivate)
+
+            XCTAssertTrue(IPAddress(172, 168, 0, 0, cidr: 12).isPrivate)
+            XCTAssertTrue(IPAddress(172, 160, 0, 0).isPrivate)
+            XCTAssertTrue(IPAddress(172, 175, 0, 0).isPrivate)
+            XCTAssertFalse(IPAddress(172, 159, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(172, 176, 0, 0).isPrivate)
+
+            XCTAssertTrue(IPAddress(10, 0, 0, 0, cidr: 8).isPrivate)
+            XCTAssertTrue(IPAddress(10, 0, 0, 0).isPrivate)
+            XCTAssertTrue(IPAddress(10, 255, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(9, 255, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(11, 0, 0, 0).isPrivate)
+        }
+        do { // v6
+            XCTAssertTrue (IPAddress(0xfd00000000000000, 0, cidr: 8).isPrivate)
+            XCTAssertTrue (IPAddress(0xfd00000000000000, 0).isPrivate)
+            XCTAssertTrue (IPAddress(0xfdffffffffffffff, 0).isPrivate)
+            XCTAssertFalse(IPAddress(0xfcffffffffffffff, 0).isPrivate)
+            XCTAssertFalse(IPAddress(0xfe00000000000000, 0).isPrivate)
+        }
+    }
+    func test_isLinkLocal() {
+        do { // v4
+            XCTAssertTrue(IPAddress(169, 254, 0, 0, cidr: 16).isLinkLocal)
+            XCTAssertTrue(IPAddress(169, 254, 255, 255).isLinkLocal)
+            XCTAssertFalse(IPAddress(169, 253, 255, 255).isLinkLocal)
+            XCTAssertFalse(IPAddress(169, 255, 0, 0).isLinkLocal)
+        }
+        do { // v6
+            XCTAssertTrue (IPAddress(0xfe80000000000000, 0, cidr: 10).isLinkLocal)
+            XCTAssertTrue (IPAddress(0xfe8fffffffffffff, 0xffffffffffffffff).isLinkLocal)
+            XCTAssertFalse(IPAddress(0xfe7fffffffffffff, 0xffffffffffffffff).isLinkLocal)
+            XCTAssertFalse(IPAddress(0xfc00000000000000, 0).isLinkLocal)
+        }
+    }
+    func test_isMulticast() {
+        do { // v4
+            XCTAssertTrue(IPAddress(224, 0, 0, 0, cidr: 4).isMulticast)
+            XCTAssertTrue(IPAddress(239, 255, 255, 255).isMulticast)
+            XCTAssertFalse(IPAddress(223, 255, 255, 255).isMulticast)
+            XCTAssertFalse(IPAddress(240, 0, 0, 0).isMulticast)
+        }
+        do { // v6
+            XCTAssertTrue(IPAddress(0xff00000000000000, 0, cidr: 8).isMulticast)
+            XCTAssertTrue(IPAddress(0xffffffffffffffff, 0xffffffffffffffff).isMulticast)
+            XCTAssertFalse(IPAddress(0xfeffffffffffffff, 0).isMulticast)
+        }
+    }
+    func test_isDocumentation() {
+        do { // v4
+            XCTAssertTrue(IPAddress(192, 0, 2, 0, cidr: 24).isDocumentation)
+            XCTAssertTrue(IPAddress(192, 0, 2, 0, cidr: 25).isDocumentation)
+            XCTAssertFalse(IPAddress(192, 0, 1, 255).isDocumentation)
+            XCTAssertFalse(IPAddress(192, 0, 3, 0).isDocumentation)
+            XCTAssertFalse(IPAddress(192, 0, 2, 0, cidr: 23).isDocumentation)
+
+            XCTAssertTrue(IPAddress(198, 51, 100, 0, cidr: 24).isDocumentation)
+            XCTAssertTrue(IPAddress(198, 51, 100, 0, cidr: 25).isDocumentation)
+            XCTAssertFalse(IPAddress(198, 51, 99, 255).isDocumentation)
+            XCTAssertFalse(IPAddress(198, 51, 101, 0).isDocumentation)
+            XCTAssertFalse(IPAddress(198, 51, 100, 0, cidr: 23).isDocumentation)
+            
+            XCTAssertTrue(IPAddress(203, 0, 113, 0, cidr: 24).isDocumentation)
+            XCTAssertTrue(IPAddress(203, 0, 113, 0, cidr: 25).isDocumentation)
+            XCTAssertFalse(IPAddress(203, 0, 112, 255).isDocumentation)
+            XCTAssertFalse(IPAddress(203, 0, 114, 0).isDocumentation)
+            XCTAssertFalse(IPAddress(203, 0, 113, 0, cidr: 23).isDocumentation)
+        }
+        do { // v6
+            XCTAssertTrue(IPAddress(0x20010db800000000, 0, cidr: 32).isDocumentation)
+            XCTAssertTrue(IPAddress(0x20010db800000000, 0).isDocumentation)
+            XCTAssertTrue(IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1).isDocumentation)
+            XCTAssertTrue(IPAddress(0x2001, 0xdb8, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff).isDocumentation)
+            XCTAssertFalse(IPAddress(0x20010db800000000, 0, cidr: 31).isDocumentation)
+            XCTAssertFalse(IPAddress(0x2001, 0xdb7, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff).isDocumentation)
+            XCTAssertFalse(IPAddress(0x2001, 0xdb9, 0, 0, 0, 0, 0, 0).isDocumentation)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isDocumentation)
+            XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isDocumentation)
         }
     }
     func test_routerAddress() {
@@ -405,11 +523,11 @@ final class IPAddressTests: XCTestCase {
     func test_compactDescription() {
 
         for (str, _, expected) in ipv4ParsingZoo + ipv6ParsingZoo {
-            guard let ip = IPAddress(str) else {
+            guard let _ = IPAddress(str) else {
                 XCTAssertNil(expected, "Expected init from '\(str)' to \(expected == nil ? "succeed" : "fail")")
                 continue
             }
-            print("init(\(str)) => expecting \(expected == nil ? "nil" : "\(expected!)") => got \(ip.compactDescription)\n")
+            //print("init(\(str)) => expecting \(expected == nil ? "nil" : "\(expected!)") => got \(ip.compactDescription)\n")
             XCTAssertEqual(IPAddress(str)?.compactDescription, expected)
         }
     }
@@ -749,90 +867,174 @@ final class CIDRTests: XCTestCase {
         }
     }
 }
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
+        }
+    }
+}
+internal extension IPAddress {
+    static var random:IPAddress {
+        Bool.random() ?
+        IPAddress(UInt32.random(in: 0...UInt32.max))
+        :
+        IPAddress(UInt64.random(in: 0...UInt64.max), UInt64.random(in: 0...UInt64.max))
+    }
+    static var randomIpv4Address:IPAddress {
+        IPAddress(UInt32.random(in: 0...UInt32.max))
+    }
+    static var randomIpv6Address:IPAddress {
+        IPAddress(UInt64.random(in: 0...UInt64.max), UInt64.random(in: 0...UInt64.max))
+    }
+}
 final class PerformanceTests : XCTestCase {
-    private func ms(_ t0:UInt64, _ t1:UInt64) -> Double {
-        Double(t1 - t0) / 1_000_000.0
+    private func fmttr(_ value:Double, _ postfix:String = "") -> String {
+        let e = Int(log10(value))
+        let fmtstr:String
+        if e < 0 {
+            fmtstr = "%-.\(-e+2)f"
+            return String(format: fmtstr, value) + postfix
+        }
+        else {
+            fmtstr = "%-.0f"
+            let str = String(format: fmtstr, value)
+            let thousandSeparated = str
+                .reversed()
+                .map({$0})
+                .chunked(into: 3)
+                .reversed()
+                .map({ $0.reversed().reduce("", {$0 + "\($1)" }) })
+                .joined(separator: " ")
+            return thousandSeparated + postfix
+        }
     }
-    private func µs(_ t0:UInt64, _ t1:UInt64) -> Double {
-        Double(t1 - t0) / 1_000.0
+    private func ms(_ ns:Double) -> String {
+        let value = ns / 1_000_000.0
+        return fmttr(value, " ms")
     }
-    private func rate<U:UnsignedInteger>(_ t0:UInt64, _ t1:UInt64, iterations:U) -> String {
-        let foo = Double(iterations) / (Double(t1 - t0) / 1_000_000_000)
-        return "\(foo) iterations per second"
+    private func µs(_ ns:Double) -> String {
+        let value = ns / 1_000.0
+        return fmttr(value, " µs")
     }
-    func test_ipv4_init_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<95ms /   ~690 000 init/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<13ms / ~5 500 000 init/s [release]
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
+    private func rate(_ ns:Double, iterations:UInt64) -> String {
+        let foo = Double(iterations) / (ns / 1_000_000_000)
+        return fmttr(foo, " invocations/second")
+    }
+    func perf_ipv4_init_from_uint32(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max)
+        for i in 1...iterations {
+            var t:UInt64 = 0
             for i in UInt32(0)..<UInt32(UInt16.max) {
+                let t0 = DispatchTime.now().uptimeNanoseconds
                 let _ = IPAddress(i)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
             }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Initialized \(UInt16.max) ipv4 addresses (from UInt32) in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/init",
-                  rate(t0, t1, iterations: UInt16.max))
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
-    func test_ipv6_init_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<83ms /   ~790 000 init/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<18ms / ~4 000 000 init/s [release]
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
+    func perf_ipv4_init_from_bytes(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in UInt32(0)..<UInt32(UInt16.max) {
+                let byteArray = Array(repeating: UInt8.random(in: 0...255), count: 4)
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(byteArray)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+    }
+    func perf_ipv6_init_from_bytes(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in UInt32(0)..<UInt32(UInt16.max) {
+                let byteArray = Array(repeating: UInt8.random(in: 0...255), count: 16)
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(byteArray)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+    }
+    func perf_ipv6_init_from_abcdefgh(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max)
+        for i in 1...iterations {
+            var t:UInt64 = 0
             for i in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
                 let _ = IPAddress(0, 0, 0, 0, 0, 0, 0, i)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
             }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("Initialized \(UInt16.max) ipv6 addresses (from UInt16's) in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/init",
-                  rate(t0, t1, iterations: UInt16.max))
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
-    func test_ipv4_contains_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<31ms /  ~4 200 000 invocations/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<2ms  / ~68 000 000 invocations/s [release]
+    func perf_ipv4_contains(iterations:Int) -> (Double,UInt64) {
         let a = IPAddress(127, 0, 0, 1)
         let b = IPAddress(127, 0, 0, 1, cidr: 8)
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            for _ in UInt32(0)..<UInt32(UInt16.max) {
+        let c = IPAddress(192, 168, 0, 1, cidr: 20)
+        let d = IPAddress(192, 168, 2, 1)
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max) * 4
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
                 let _ = a.contains(a) // true
                 let _ = a.contains(b) // false
+                let _ = c.contains(d) // true
+                let _ = d.contains(b) // false
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
             }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            let count = UInt(UInt16.max) * 2
-            print("Performed \(count) contains(other:) calls in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
-                  rate(t0, t1, iterations: count))
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
-    func test_ipv6_contains_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<35ms /  ~3 800 000 invocations/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<5ms  / ~31 000 000 invocations/s [release]
+    func perf_ipv6_contains(iterations:Int) -> (Double,UInt64) {
         let a = IPAddress(0, 0, 0, 0, 0, 0, 0, 1)
         let b = IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64)
-        measure {
-            let t0 = DispatchTime.now().uptimeNanoseconds
+        let c = IPAddress(0xffff, 0, 0, 0, 0, 0, 0, 255, cidr: 64)
+        let d = IPAddress(0xffff, 0, 0, 0, 0, 0xaaaa, 0, 255, cidr: 72)
+        var tarr:[Double] = []
+        let count = UInt(UInt16.max) * 4
+        for i in 1...iterations {
+            var t:UInt64 = 0
             for _ in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
                 let _ = a.contains(a) // true
                 let _ = a.contains(b) // false
+                let _ = c.contains(d) // true
+                let _ = d.contains(b) // false
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
             }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            let count = UInt(UInt16.max) * 2
-            print("Performed \(count) contains(other:) calls in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
-                  rate(t0, t1, iterations: count))
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
-    func test_init_from_string_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<1550ms /  ~42 000 init/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<650ms  / ~101 000 init/s [release]
-        print("Generating test strings...", terminator: "")
+    func perf_init_from_string(iterations:Int) -> (Double,UInt64) {
+        //print("Generating test strings...", terminator: "")
         var a:[String] = []
         var i:UInt16 = 0
         while i < UInt16.max {
@@ -842,55 +1044,89 @@ final class PerformanceTests : XCTestCase {
                 i += 1
             }
         }
-        print("done")
-        measure {
-            var nilCount = 0
-            let t0 = DispatchTime.now().uptimeNanoseconds
+        //print("done")
+        var tarr:[Double] = []
+        let count = UInt(a.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
             for str in a {
-                guard let _ = IPAddress(str) else {
-                    nilCount += 1
-                    continue
-                }
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(str)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
             }
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            let count = UInt(a.count)
-            print("Initialized \(a.count) ipv4/ipv6 addresses (from String) in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/invocation",
-                  rate(t0, t1, iterations: count),
-                  "(string pool has \(Int(100 * Double(nilCount) / Double(a.count)))% of addresses resulting to init failure)")
+            tarr.append(Double(t))
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
     }
-    func test_ipv4_iterator_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<820ms /   ~635 000 iterations/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<150ms / ~3 500 000 iterations/s [release]
-        measure {
-            let ip = IPAddress(0, cidr: 10)
+    func perf_ipv4_iterator(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, cidr: 10)
+        let count = UInt64(ip.cidr.hostCount)
+        for i in 1...iterations {
             var iterator = IPAddressIterator(address: ip)
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = iterator.next() {}
             let t1 = DispatchTime.now().uptimeNanoseconds
-            let count = UInt64(ip.cidr.hostCount)
-            print("Performed \(count) ipv4 iterations in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/iteration",
-                  rate(t0, t1, iterations: count))
+            tarr.append(Double(t1 - t0))
+            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func test_ipv6_iterator_performance() {
-        // For reference:
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<950ms /   ~138 000 iterations/s [debug]
-        // MacBook Pro (16-inch, 2021), Apple M1 Max, 64GB memory => ~<101ms / ~1 309 000 iterations/s [release]
-        measure {
-            let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 105)
+    func perf_ipv6_iterator(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 105)
+        let count = UInt64(ip.cidr.hostCount)
+        for i in 1...iterations {
             var iterator = IPAddressIterator(address: ip)
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = iterator.next() {}
             let t1 = DispatchTime.now().uptimeNanoseconds
-            let count = UInt64(ip.cidr.hostCount)
-            print("Performed \(count) ipv6 iterations in",
-                  ms(t0, t1), "ms =>", µs(t0, t1), "µs/iteration",
-                  rate(t0, t1, iterations: count))
+            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
+            tarr.append(Double(t1 - t0))
         }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    // system_profiler SPSoftwareDataType SPHardwareDataType
+    func spec() -> String {
+        var elements:[String] = []
+        let info = ProcessInfo.processInfo
+        elements.append("Operating system \(info.operatingSystemVersionString)")
+        elements.append("\(info.processorCount) processors")
+        elements.append("\(info.physicalMemory) bytes of memory")
+        return elements.joined(separator: ", ")
+    }
+    func runit(name:String, _ f: (Int)->(Double,UInt64)) {
+        print("##", name)
+        print("### \(spec())")
+        #if DEBUG
+        print("### Build: Debug")
+        #else
+        print("### Build: Release")
+        #endif
+        print("```")
+        let (avg, count) = f(3)
+        print("==============================================")
+        print("Average:", rate(avg, iterations: count))
+        print("```")
+    }
+        // system_profiler SPSoftwareDataType SPHardwareDataType
+    func test_run_all_perf_tests() {
+        runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
+        runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
+        runit(name: "IPAddress .contains(other:) performance (ipv4)", perf_ipv4_contains(iterations:))
+        runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
+        runit(name: "IPAddress .init(string:) performance (ipv4 & ipv6)", perf_init_from_string(iterations:))
+        runit(name: "IPAddress .init(uint32:) performance (ipv4)", perf_ipv4_init_from_uint32(iterations:))
+        runit(name: "IPAddress .init(abcdefgh:) performance (ipv6)", perf_ipv6_init_from_abcdefgh(iterations:))
+        runit(name: "IPAddress .init(bytes:) performance (ipv4)", perf_ipv4_init_from_bytes(iterations:))
+        runit(name: "IPAddress .init(bytes:) performance (ipv6)", perf_ipv6_init_from_bytes(iterations:))
+        runit(name: "IPAddress .init(string:) performance (ipv4 & ipv6)", perf_init_from_string(iterations:))
+        runit(name: "IPAddress .contains(other:) performance (ipv4)", perf_ipv4_contains(iterations:))
+        runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
+        runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
+        runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [
