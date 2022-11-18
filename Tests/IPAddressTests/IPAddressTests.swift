@@ -627,29 +627,6 @@ final class IPAddressTests: XCTestCase {
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6lhs, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6rhs, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
     }
-    func test_foo() {
-        let ip = IPAddress(192, 168, 0, 0, cidr: 16)
-        print(ip)
-        print(ip.compactDebugDescription)
-        print(ip.networkOrderedAddressBytes.map({ String($0, radix: 16) }))
-    func _test_foo() {
-//        let a = IPAddress(192, 168, 8, 16, cidr: 28)
-        let a = IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 63)
-        /*
-         192.168.8.16/28
-         192.168.8.16/28
-         192.168.8.17/28
-         192.168.8.31/28
-         [192, 168, 8, 16]
-         ["c0", "a8", "8", "10"]
-         */
-        print(a.compactDebugDescription)
-        print(a.networkAddress!.compactDebugDescription)
-//        print(a.routerAddress!.compactDebugDescription)
-//        print(a.broadcastAddress!.compactDebugDescription)
-//        print(a.networkOrderedAddressBytes)
-//        print(a.networkOrderedAddressBytes.map({ String($0, radix: 16) }))
-    }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
        the Int's capabilities.
@@ -1134,43 +1111,7 @@ final class PerformanceTests : XCTestCase {
         print("Average:", rate(avg, iterations: count))
         print("```")
     }
-    func perf_ipv4_iterator(iterations:Int) -> (Double,UInt64) {
-        var tarr:[Double] = []
-        let ip = IPAddress(0, cidr: 10)
-        let count = UInt64(ip.cidr.hostCount)
-        for i in 1...iterations {
-            var iterator = IPAddressIterator(address: ip)
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            while let _ = iterator.next() {}
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            tarr.append(Double(t1 - t0))
-            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
-        }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
-    func perf_ipv6_iterator(iterations:Int) -> (Double,UInt64) {
-        var tarr:[Double] = []
-        let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 105)
-        let count = UInt64(ip.cidr.hostCount)
-        for i in 1...iterations {
-            var iterator = IPAddressIterator(address: ip)
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            while let _ = iterator.next() {}
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
-            tarr.append(Double(t1 - t0))
-        }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
         // system_profiler SPSoftwareDataType SPHardwareDataType
-    func runit(name:String, _ f: (Int)->(Double,UInt64)) {
-        print("##", name)
-        print("```")
-        let (avg, count) = f(3)
-        print("==============================================")
-        print("Average:", rate(avg, iterations: count))
-        print("```")
-    }
     func test_run_all_perf_tests() {
         runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
         runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
