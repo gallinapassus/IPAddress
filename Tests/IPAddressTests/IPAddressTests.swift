@@ -1089,17 +1089,28 @@ final class PerformanceTests : XCTestCase {
         return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     // system_profiler SPSoftwareDataType SPHardwareDataType
-    func spec() -> String {
+    func hwspec() -> String {
         var elements:[String] = []
         let info = ProcessInfo.processInfo
         elements.append("Operating system \(info.operatingSystemVersionString)")
+        #if os(Linux)
+        elements.append("\(fmttr(Double(info.physicalMemory), " bytes of memory"))")
+        #elseif os(macOS)
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var machine = [CChar](repeating: 0,  count: size)
+        sysctlbyname("machdep.cpu.brand_string", &machine, &size, nil, 0)
+        elements.append(String(cString: machine))
         elements.append("\(info.processorCount) processors")
-        elements.append("\(info.physicalMemory) bytes of memory")
+        var measurement = Measurement(value: Double(info.physicalMemory), unit: UnitInformationStorage.bytes)
+        measurement.convert(to: UnitInformationStorage.gibibytes)
+        elements.append("\(measurement.description) of memory")
+        #endif
         return elements.joined(separator: ", ")
     }
     func runit(name:String, _ f: (Int)->(Double,UInt64)) {
         print("##", name)
-        print("### \(spec())")
+        print("### \(hwspec())")
         #if DEBUG
         print("### Build: Debug")
         #else
