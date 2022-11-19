@@ -605,33 +605,12 @@ final class IPAddressTests: XCTestCase {
         let a = IPAddress([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])!
         let b = IPAddress(0x200, 0, 0, 0, 0, 0, 0, 1)
         let c = IPAddress("200::1")!
-//        print("A",
-//              a.description,
-//              withUnsafeBytes(of: a.ipv6lhs, { Array($0) }),
-//              withUnsafeBytes(of: a.ipv6rhs, { Array($0) }), "init(bytes:)"
-//        )
-        XCTAssertEqual(withUnsafeBytes(of: a.ipv6lhs, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
-        XCTAssertEqual(withUnsafeBytes(of: a.ipv6rhs, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
-//        print("B",
-//              b.description,
-//              withUnsafeBytes(of: b.ipv6lhs, { Array($0) }),
-//              withUnsafeBytes(of: b.ipv6rhs, { Array($0) }), "init(UInt16...)"
-//        )
-        XCTAssertEqual(withUnsafeBytes(of: b.ipv6lhs, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
-        XCTAssertEqual(withUnsafeBytes(of: b.ipv6rhs, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
-//        print("C",
-//              c.description,
-//              withUnsafeBytes(of: c.ipv6lhs, { Array($0) }),
-//              withUnsafeBytes(of: c.ipv6rhs, { Array($0) }), "init(String)"
-//        )
-        XCTAssertEqual(withUnsafeBytes(of: c.ipv6lhs, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
-        XCTAssertEqual(withUnsafeBytes(of: c.ipv6rhs, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
-    }
-    func test_bige() {
-        let v6 = IPAddress(1, 2, 3, 4)
-        let v6cd = v6.description
-        print(v6cd)
-        XCTAssertEqual(v6cd, "1.2.3.4")
+        XCTAssertEqual(withUnsafeBytes(of: a.ipv6lhs.littleEndian, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
+        XCTAssertEqual(withUnsafeBytes(of: a.ipv6rhs.littleEndian, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(withUnsafeBytes(of: b.ipv6lhs.littleEndian, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
+        XCTAssertEqual(withUnsafeBytes(of: b.ipv6rhs.littleEndian, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(withUnsafeBytes(of: c.ipv6lhs.littleEndian, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
+        XCTAssertEqual(withUnsafeBytes(of: c.ipv6rhs.littleEndian, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
     }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
