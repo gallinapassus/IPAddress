@@ -627,6 +627,12 @@ final class IPAddressTests: XCTestCase {
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6lhs, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6rhs, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
     }
+    func test_bige() {
+        let v6 = IPAddress(1, 2, 3, 4)
+        let v6cd = v6.description
+        print(v6cd)
+        XCTAssertEqual(v6cd, "1.2.3.4")
+    }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
        the Int's capabilities.
@@ -1088,8 +1094,67 @@ final class PerformanceTests : XCTestCase {
         }
         return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    // system_profiler SPSoftwareDataType SPHardwareDataType
+    func perf_ipv4_description(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max)
+        for i in 1...iterations {
+            let ip = IPAddress(1, 2, 3, 4)
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = ip.description
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            tarr.append(Double(t))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_description(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max)
+        for i in 1...iterations {
+            let ip = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = ip.description
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            tarr.append(Double(t))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_compactDescription(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max)
+        for i in 1...iterations {
+            let a = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
+            let b = IPAddress(1, 2, 3, 0, 0, 6, 7, 8)
+            let c = IPAddress(1, 2, 3, 0, 0, 0, 7, 8)
+            let d = IPAddress(1, 0, 0, 4, 0, 0, 7, 8)
+            let e = IPAddress(1, 0, 0, 4, 0, 0, 0, 8)
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = a.description
+                let _ = b.description
+                let _ = c.description
+                let _ = d.description
+                let _ = e.description
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            tarr.append(Double(t))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
     func hwspec() -> String {
+        // system_profiler SPSoftwareDataType SPHardwareDataType
         var elements:[String] = []
         let info = ProcessInfo.processInfo
         elements.append("Operating system \(info.operatingSystemVersionString)")
@@ -1124,11 +1189,6 @@ final class PerformanceTests : XCTestCase {
     }
         // system_profiler SPSoftwareDataType SPHardwareDataType
     func test_run_all_perf_tests() {
-        runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
-        runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
-        runit(name: "IPAddress .contains(other:) performance (ipv4)", perf_ipv4_contains(iterations:))
-        runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
-        runit(name: "IPAddress .init(string:) performance (ipv4 & ipv6)", perf_init_from_string(iterations:))
         runit(name: "IPAddress .init(uint32:) performance (ipv4)", perf_ipv4_init_from_uint32(iterations:))
         runit(name: "IPAddress .init(abcdefgh:) performance (ipv6)", perf_ipv6_init_from_abcdefgh(iterations:))
         runit(name: "IPAddress .init(bytes:) performance (ipv4)", perf_ipv4_init_from_bytes(iterations:))
@@ -1138,6 +1198,9 @@ final class PerformanceTests : XCTestCase {
         runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
         runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
         runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
+        runit(name: "IPAddress .description performance (ipv4)", perf_ipv4_description(iterations:))
+        runit(name: "IPAddress .description performance (ipv6)", perf_ipv6_description(iterations:))
+        runit(name: "IPAddress .compactDescription performance (ipv6)", perf_ipv6_compactDescription(iterations:))
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [

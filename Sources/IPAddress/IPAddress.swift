@@ -212,45 +212,53 @@ public struct IPAddress : Codable {
             ]
         }
         else {
-            fatalError("not implemented")
+            uint16bytes = [
+                UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)),
+                UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)),
+                UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)),
+                UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)),
+
+                UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)),
+                UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)),
+                UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)),
+                UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)),
+            ]
         }
-        if var s = uint16bytes.firstIndex(of: 0) {
-            var pairs:[Range<Int>] = []
-            var maxLen = 0
-            var longestZeroStrikeAt = -1
-            var len:Array<UInt16>.Index = 0
-            var e = uint16bytes.startIndex
-            while s < uint16bytes.endIndex {
-                e = uint16bytes[s...].firstIndex(where: { $0 != 0 }) ?? uint16bytes.endIndex
-                len = e - s
-                if len > maxLen {
-                    maxLen = len
-                    longestZeroStrikeAt += 1
-                }
-                pairs.append((s..<e))
-                s = uint16bytes[e...].firstIndex(of: 0) ?? uint16bytes.endIndex
-            }
+        guard var s = uint16bytes.firstIndex(of: 0) else {
+            return "\(description)"
+        }
+        var pairs:[Range<Int>] = []
+        var maxLen = 0
+        var longestZeroStrikeAt = -1
+        var len:Array<UInt16>.Index = 0
+        var e = uint16bytes.startIndex
+        while s < uint16bytes.endIndex {
+            e = uint16bytes[s...].firstIndex(where: { $0 != 0 }) ?? uint16bytes.endIndex
+            len = e - s
             if len > maxLen {
                 maxLen = len
                 longestZeroStrikeAt += 1
             }
-            if longestZeroStrikeAt > -1 {
-                let a = pairs[longestZeroStrikeAt]
-                
-                let h = uint16bytes[..<a.startIndex].map({
-                    String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
-                }).joined(separator: ":") + ":"
-                let t = ":" + uint16bytes[a.endIndex...].map({
-                    String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
-                }).joined(separator: ":")
-                
-                return h + t
-            }
-            else {
-                return "\(description)"
-            }
+            pairs.append((s..<e))
+            s = uint16bytes[e...].firstIndex(of: 0) ?? uint16bytes.endIndex
         }
-        return "\(description)"
+        if len > maxLen {
+            maxLen = len
+            longestZeroStrikeAt += 1
+        }
+        guard longestZeroStrikeAt > -1 else {
+            return "\(description)"
+        }
+        let a = pairs[longestZeroStrikeAt]
+        
+        let h = uint16bytes[..<a.startIndex].map({
+            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+        }).joined(separator: ":") + ":"
+        let t = ":" + uint16bytes[a.endIndex...].map({
+            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+        }).joined(separator: ":")
+        
+        return h + t
     }
     public var compactDebugDescription:String {
         return compactDescription + "/\(cidr.bits)"
@@ -314,39 +322,49 @@ extension IPAddress : CustomStringConvertible {
     public var description: String {
         switch type {
         case .v4:
+            let str:String
             if Self.systemIsLittleEndian {
-                return withUnsafeBytes(of: sysendianIpv4, { Array($0) })
-                    .reversed()
-                    .map({ $0.description })
-                    .joined(separator: ".")
+                str =
+                UInt8((sysendianIpv4 & 0xff000000)>>24).description + "." +
+                UInt8((sysendianIpv4 & 0x00ff0000)>>16).description + "." +
+                UInt8((sysendianIpv4 & 0x0000ff00)>>8).description + "." +
+                UInt8((sysendianIpv4 & 0x000000ff)).description
             }
             else {
-                return withUnsafeBytes(of: sysendianIpv4, { Array($0) })
-                    .reversed()
-                    .map({ $0.description })
-                    .joined(separator: ".")
+                str =
+                UInt8((sysendianIpv4 & 0x000000ff)).description + "." +
+                UInt8((sysendianIpv4 & 0x0000ff00)>>8).description + "." +
+                UInt8((sysendianIpv4 & 0x00ff0000)>>16).description + "." +
+                UInt8((sysendianIpv4 & 0xff000000)>>24).description
             }
+            return str
         case .v6:
+            let str:String
             if Self.systemIsLittleEndian {
-                let uint16bytes:[UInt16] = [
-                        UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
-                        UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
-                        UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
-                        UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
-                        
-                        UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
-                        UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
-                        UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
-                        UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
-                ]
-                return uint16bytes.map({ String($0, radix: 16) }).joined(separator: ":")
+                str =
+                String(UInt16(((ipv6lhs & 0xffff000000000000)>>48)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x000000000000ffff)<<0)), radix: 16) + ":" +
+                
+                String(UInt16(((ipv6rhs & 0xffff000000000000)>>48)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x000000000000ffff)<<0)), radix: 16)
             }
             else {
-                fatalError("not implemented")
-//                return (withUnsafeBytes(of: ipv6lhs, { Array($0) }) + withUnsafeBytes(of: ipv6rhs, { Array($0) }))
-//                    .map({ $0.description })
-//                    .joined(separator: ":")
+                str =
+                String(UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)), radix: 16) + ":" +
+                String(UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)), radix: 16) + ":" +
+                
+                String(UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)), radix: 16) + ":" +
+                String(UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)), radix: 16)
             }
+            return str
         }
     }
 }
@@ -485,12 +503,6 @@ extension IPAddress {
         guard cidr.bits <= 32, type == .v4 else { return nil }
         return Self.systemIsLittleEndian ? sysendianIpv4 : sysendianIpv4.byteSwapped
     }
-    /// Returns ip address's cidr mask binary representation as String
-//    public var cidrBitMaskDescription:String {
-//        mutating get {
-//            cidr.bytes.map({ $0 == 0 ? String(repeating: "0", count: 8) : String($0, radix: 2) }).joined(separator: ":")
-//        }
-//    }
     /// Network address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
