@@ -612,6 +612,52 @@ final class IPAddressTests: XCTestCase {
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6lhs.littleEndian, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
         XCTAssertEqual(withUnsafeBytes(of: c.ipv6rhs.littleEndian, { Array($0) }), [1, 0, 0, 0, 0, 0, 0, 0])
     }
+    func test_advanced() {
+        do { // v4
+            let a = IPAddress(0)
+            let b = IPAddress(0, 0, 0xff, 0xfe)
+            let c = IPAddress(UInt32.max)
+
+            XCTAssertEqual(a.advanced(by: 0), a)
+            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 1))
+            XCTAssertNil(a.advanced(by: -1))
+
+            XCTAssertEqual(b.advanced(by: 0), b)
+            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0xff, 0xff))
+            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 1, 0, 0))
+            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0xff, 0xfd))
+            XCTAssertNil(b.advanced(by: -Int(UInt32.max)))
+            XCTAssertEqual(b.advanced(by: 0x00010001), IPAddress(0, 1, 255, 255))
+            XCTAssertEqual(b.advanced(by: 0xffff0001), IPAddress(255, 255, 255, 255))
+            XCTAssertNil(b.advanced(by: 0xffff0002))
+
+            XCTAssertEqual(c.advanced(by: 0), c)
+            XCTAssertNil(c.advanced(by: 1))
+            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xfffffffe))
+            XCTAssertEqual(c.advanced(by: -Int(UInt32.max)), IPAddress(0))
+            XCTAssertNil(c.advanced(by: -Int(UInt32.max) - 1))
+        }
+        do { // v6
+            let a = IPAddress("::")!
+            let b = IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xffff)
+            let c = IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe)
+            XCTAssertEqual(a.advanced(by: 0), a)
+            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 0, 0, 0, 0, 1))
+            XCTAssertEqual(a.advanced(by: Int.max), IPAddress(0, 0, 0, 0, 0x7fff, 0xffff, 0xffff, 0xffff))
+            XCTAssertNil(a.advanced(by: Int.min))
+            XCTAssertNil(a.advanced(by: -1))
+
+            XCTAssertEqual(b.advanced(by: 0), b)
+            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0, 1, 0, 0, 0, 0))
+            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 0, 0, 1, 0, 0, 0, 1))
+            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xfffe))
+
+            XCTAssertEqual(c.advanced(by: 0), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe))
+            XCTAssertEqual(c.advanced(by: 1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff))
+            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffd))
+            XCTAssertNil(c.advanced(by: 2))
+        }
+    }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
        the Int's capabilities.
@@ -1073,6 +1119,42 @@ final class PerformanceTests : XCTestCase {
         }
         return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
+    func perf_ipv4_advanced(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, 0xf0, 0, 0, cidr: 24)
+        let range = -Int(UInt16.max)...Int(UInt16.max)
+        let count:UInt64 = UInt64(range.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in range {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = ip.advanced(by: i)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            tarr.append(Double(t))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_advanced(iterations:Int) -> (Double,UInt64) {
+        var tarr:[Double] = []
+        let ip = IPAddress(0, 0, 0xf, 0, 0, 0, 0, 0, cidr: 120)
+        let range = -Int(UInt16.max)...Int(UInt16.max)
+        let count:UInt64 = UInt64(range.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in range {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = ip.advanced(by: i)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            tarr.append(Double(t))
+        }
+        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
     func perf_ipv4_description(iterations:Int) -> (Double,UInt64) {
         var tarr:[Double] = []
         let count = UInt64(UInt16.max)
@@ -1175,6 +1257,8 @@ final class PerformanceTests : XCTestCase {
         runit(name: "IPAddress .init(string:) performance (ipv4 & ipv6)", perf_init_from_string(iterations:))
         runit(name: "IPAddress .contains(other:) performance (ipv4)", perf_ipv4_contains(iterations:))
         runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
+        runit(name: "IPAddress .advanced(by:) performance (ipv4)", perf_ipv4_advanced(iterations:))
+        runit(name: "IPAddress .advanced(by:) performance (ipv6)", perf_ipv6_advanced(iterations:))
         runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
         runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
         runit(name: "IPAddress .description performance (ipv4)", perf_ipv4_description(iterations:))
