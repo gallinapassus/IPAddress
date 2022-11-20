@@ -628,14 +628,36 @@ extension IPAddress {
     }
     /// Returns a ip address that is offset the specified distance from this ip address.
     ///
-    /// - Returns: An ip address that is offset the specified distance from this ip address
-    /// and with the same cidr. Returns `nil` if offset overflows the ip's addressable range.
-    public func advanced(by: Int) -> IPAddress? {
-        // TODO: Implement a variant advanced(by:clampingToNetwork:)
+    /// - Returns: When clamping is `false`, returns an ip address (with single
+    ///  endpoint cidr) that is offset the specified distance from this ip address.
+    ///  Returns `nil` if offset overflows the ip's addressable range.
+    ///  When clamping is `true`, returns an ip address (with same cidr as original
+    ///  ip address) that is offset the specified distance from this ip address
+    ///  or `nil`if offset overflows the original ip addresse's network range.
+    ///
+    /// Example
+    ///
+    ///     // unclamped
+    ///     let ip = IPAddress(192, 0, 2, 0, cidr: 24)
+    ///     let offsetted = ip.advanced(by: -1) // 192.0.1.255/32
+    ///
+    ///     // clamped
+    ///     let ip = IPAddress(192, 0, 2, 0, cidr: 24)
+    ///     let next = ip.advanced(by: 1, clamped: true) // 192.0.2.1/24
+    ///     let prev = ip.advanced(by: -1, clamped: true) // nil
+    ///
+    public func advanced(by: Int, clamped:Bool = false) -> IPAddress? {
         guard by != 0 else { return self } // return quickly
         if type == .v4 {
             guard let u32 = UInt32(exactly: Int(sysendianIpv4) + by) else { return nil }
-            return IPAddress(u32, cidr: cidr.bits)
+            let newIp = IPAddress(u32, cidr: cidr.bits)
+            guard clamped == true, let na = networkAddress else {
+                return IPAddress(u32, cidr: CIDR.validV4Range.upperBound)
+            }
+            guard na.contains(newIp) else {
+                return nil
+            }
+            return newIp
         }
         else {
             guard by != Int.min else { return nil } // -Int.min would overflow
@@ -645,9 +667,23 @@ extension IPAddress {
                 guard lo == false else {
                     return nil
                 }
-                return IPAddress(l, r, cidr: cidr.bits)
+                let newIp = IPAddress(l, r, cidr: CIDR.validV6Range.upperBound)
+                guard clamped == true, let na = networkAddress else {
+                    return newIp
+                }
+                guard na.contains(newIp) else {
+                    return nil
+                }
+                return newIp
             }
-            return IPAddress(ipv6lhs, r, cidr: cidr.bits)
+            let newIp = IPAddress(ipv6lhs, r, cidr: cidr.bits)
+            guard clamped == true, let na = networkAddress else {
+                return newIp
+            }
+            guard na.contains(newIp) else {
+                return nil
+            }
+            return newIp
         }
     }
     // MARK: -

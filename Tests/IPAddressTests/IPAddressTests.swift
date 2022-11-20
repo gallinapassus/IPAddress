@@ -433,6 +433,7 @@ final class IPAddressTests: XCTestCase {
             let ipv4host_b = IPAddress(62, 115, 44, 164)
             let ipv4host_c = IPAddress(62, 115, 44, 0, cidr: 22)
 
+            XCTAssertTrue(ipv4host_c.contains(ipv4host_c))
             XCTAssertTrue(ipv4host_c.contains(ipv4host_a))
             XCTAssertFalse(ipv4host_a.contains(ipv4host_b))
             XCTAssertTrue(ipv4host_c.contains(ipv4host_a))
@@ -481,6 +482,7 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(1, 2, 3, 4, 5, 255, 65535, 65535),
             ]
             
+            XCTAssertTrue(v6network.contains(v6network))
             XCTAssertFalse(v6network.contains(v6host_below))
             for other in v6host_inrange {
                 let msg = [
@@ -619,43 +621,88 @@ final class IPAddressTests: XCTestCase {
             let c = IPAddress(UInt32.max)
 
             XCTAssertEqual(a.advanced(by: 0), a)
-            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 1))
+            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 1, cidr: 32))
             XCTAssertNil(a.advanced(by: -1))
 
             XCTAssertEqual(b.advanced(by: 0), b)
-            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0xff, 0xff))
-            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 1, 0, 0))
-            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0xff, 0xfd))
+            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0xff, 0xff, cidr: 32))
+            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 1, 0, 0, cidr: 32))
+            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0xff, 0xfd, cidr: 32))
             XCTAssertNil(b.advanced(by: -Int(UInt32.max)))
-            XCTAssertEqual(b.advanced(by: 0x00010001), IPAddress(0, 1, 255, 255))
-            XCTAssertEqual(b.advanced(by: 0xffff0001), IPAddress(255, 255, 255, 255))
+            XCTAssertEqual(b.advanced(by: 0x00010001), IPAddress(0, 1, 255, 255, cidr: 32))
+            XCTAssertEqual(b.advanced(by: 0xffff0001), IPAddress(255, 255, 255, 255, cidr: 32))
             XCTAssertNil(b.advanced(by: 0xffff0002))
 
             XCTAssertEqual(c.advanced(by: 0), c)
             XCTAssertNil(c.advanced(by: 1))
-            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xfffffffe))
-            XCTAssertEqual(c.advanced(by: -Int(UInt32.max)), IPAddress(0))
+            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xfffffffe, cidr: 32))
+            XCTAssertEqual(c.advanced(by: -Int(UInt32.max)), IPAddress(0, cidr: 32))
             XCTAssertNil(c.advanced(by: -Int(UInt32.max) - 1))
+        }
+        do { // v4 clamped
+            let a = IPAddress(0, cidr: 30)
+            let b = IPAddress(0, 0, 248, 65, cidr: 29)
+            let c = IPAddress(UInt32.max, cidr: 0)
+            XCTAssertEqual(a.advanced(by: 0, clamped: true), a)
+            XCTAssertEqual(a.advanced(by: 1, clamped: true), IPAddress(0, 0, 0, 1, cidr: 30))
+            XCTAssertEqual(a.advanced(by: 3, clamped: true), IPAddress(0, 0, 0, 3, cidr: 30))
+            XCTAssertNil(a.advanced(by: 4, clamped: true))
+            XCTAssertNil(a.advanced(by: -1, clamped: true))
+
+            XCTAssertEqual(b.advanced(by: 0, clamped: true), b)
+            XCTAssertEqual(b.advanced(by: 1, clamped: true), IPAddress(0, 0, 248, 66, cidr: 29))
+            XCTAssertEqual(b.advanced(by: 6, clamped: true), IPAddress(0, 0, 248, 71, cidr: 29))
+            XCTAssertNil(b.advanced(by: 7, clamped: true))
+            XCTAssertEqual(b.advanced(by: -1, clamped: true), IPAddress(0, 0, 248, 64, cidr: 29))
+            XCTAssertNil(b.advanced(by: -2, clamped: true))
+
+            XCTAssertEqual(c.advanced(by: 0, clamped: true), c)
+            XCTAssertNil(c.advanced(by: 1, clamped: true))
+            XCTAssertEqual(c.advanced(by: -1, clamped: true), IPAddress(0xfffffffe, cidr: 0))
+            XCTAssertEqual(c.advanced(by: -Int(UInt32.max), clamped: true), IPAddress(0, cidr: 0))
+            XCTAssertNil(c.advanced(by: -Int(UInt32.max) - 1, clamped: true))
         }
         do { // v6
             let a = IPAddress("::")!
             let b = IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xffff)
             let c = IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe)
             XCTAssertEqual(a.advanced(by: 0), a)
-            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 0, 0, 0, 0, 1))
-            XCTAssertEqual(a.advanced(by: Int.max), IPAddress(0, 0, 0, 0, 0x7fff, 0xffff, 0xffff, 0xffff))
+            XCTAssertEqual(a.advanced(by: 1), IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128))
+            XCTAssertEqual(a.advanced(by: Int.max), IPAddress(0, 0, 0, 0, 0x7fff, 0xffff, 0xffff, 0xffff, cidr: 128))
             XCTAssertNil(a.advanced(by: Int.min))
             XCTAssertNil(a.advanced(by: -1))
 
             XCTAssertEqual(b.advanced(by: 0), b)
-            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0, 1, 0, 0, 0, 0))
-            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 0, 0, 1, 0, 0, 0, 1))
-            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xfffe))
+            XCTAssertEqual(b.advanced(by: 1), IPAddress(0, 0, 0, 1, 0, 0, 0, 0, cidr: 128))
+            XCTAssertEqual(b.advanced(by: 2), IPAddress(0, 0, 0, 1, 0, 0, 0, 1, cidr: 128))
+            XCTAssertEqual(b.advanced(by: -1), IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 128))
 
-            XCTAssertEqual(c.advanced(by: 0), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe))
-            XCTAssertEqual(c.advanced(by: 1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff))
-            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffd))
+            XCTAssertEqual(c.advanced(by: 0), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 128))
+            XCTAssertEqual(c.advanced(by: 1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, cidr: 128))
+            XCTAssertEqual(c.advanced(by: -1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffd, cidr: 128))
             XCTAssertNil(c.advanced(by: 2))
+        }
+        do { // v6 clamped
+            let a = IPAddress("::/126")!
+            let b = IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xfffd, cidr: 125)
+            let c = IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 127)
+
+            XCTAssertEqual(a.advanced(by: 0, clamped: true), a)
+            XCTAssertEqual(a.advanced(by: 1, clamped: true), IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 126))
+            XCTAssertNil(a.advanced(by: 4, clamped: true))
+            XCTAssertNil(a.advanced(by: Int.max, clamped: true))
+            XCTAssertNil(a.advanced(by: Int.min, clamped: true))
+            XCTAssertNil(a.advanced(by: -1, clamped: true))
+            
+            XCTAssertEqual(b.advanced(by: 0, clamped: true), b)
+            XCTAssertEqual(b.advanced(by: 1, clamped: true), IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 125))
+            XCTAssertEqual(b.advanced(by: 2, clamped: true), IPAddress(0, 0, 0, 0, 0xffff, 0xffff, 0xffff, 0xffff, cidr: 125))
+            XCTAssertNil(b.advanced(by: 3, clamped: true))
+            XCTAssertNil(b.advanced(by: -6, clamped: true))
+
+            XCTAssertEqual(c.advanced(by: 0), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 127))
+            XCTAssertEqual(c.advanced(by: 1), IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, cidr: 127))
+            XCTAssertNil(c.advanced(by: -1,clamped: true))
         }
     }
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
