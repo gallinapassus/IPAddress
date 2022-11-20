@@ -193,77 +193,8 @@ public struct IPAddress : Codable {
             self = validV4 // was v4
         }
     }
-    public var compactDescription:String {
-        guard type == .v6 else {
-            return description
-        }
-        let uint16bytes:[UInt16]
-        if Self.systemIsLittleEndian {
-            uint16bytes = [
-                UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
-                UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
-                UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
-                UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
-
-                UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
-                UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
-                UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
-                UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
-            ]
-        }
-        else {
-            uint16bytes = [
-                UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)),
-                UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)),
-                UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)),
-                UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)),
-
-                UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)),
-                UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)),
-                UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)),
-                UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)),
-            ]
-        }
-        guard var s = uint16bytes.firstIndex(of: 0) else {
-            return "\(description)"
-        }
-        var pairs:[Range<Int>] = []
-        var maxLen = 0
-        var longestZeroStrikeAt = -1
-        var len:Array<UInt16>.Index = 0
-        var e = uint16bytes.startIndex
-        while s < uint16bytes.endIndex {
-            e = uint16bytes[s...].firstIndex(where: { $0 != 0 }) ?? uint16bytes.endIndex
-            len = e - s
-            if len > maxLen {
-                maxLen = len
-                longestZeroStrikeAt += 1
-            }
-            pairs.append((s..<e))
-            s = uint16bytes[e...].firstIndex(of: 0) ?? uint16bytes.endIndex
-        }
-        if len > maxLen {
-            maxLen = len
-            longestZeroStrikeAt += 1
-        }
-        guard longestZeroStrikeAt > -1 else {
-            return "\(description)"
-        }
-        let a = pairs[longestZeroStrikeAt]
-        
-        let h = uint16bytes[..<a.startIndex].map({
-            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
-        }).joined(separator: ":") + ":"
-        let t = ":" + uint16bytes[a.endIndex...].map({
-            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
-        }).joined(separator: ":")
-        
-        return h + t
-    }
-    public var compactDebugDescription:String {
-        return compactDescription + "/\(cidr.bits)"
-    }
 }
+// MARK: -
 extension IPAddress : Equatable {
     ///
     /// Returns a boolean value indicating if two IPAddress
@@ -367,19 +298,89 @@ extension IPAddress : CustomStringConvertible {
             return str
         }
     }
+    public var compactDescription:String {
+        guard type == .v6 else {
+            return description
+        }
+        let uint16bytes:[UInt16]
+        if Self.systemIsLittleEndian {
+            uint16bytes = [
+                UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
+                UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
+                UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
+                UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
+                
+                UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
+                UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
+                UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
+                UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
+            ]
+        }
+        else {
+            uint16bytes = [
+                UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)),
+                UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)),
+                UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)),
+                UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)),
+                
+                UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)),
+                UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)),
+                UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)),
+                UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)),
+            ]
+        }
+        guard var s = uint16bytes.firstIndex(of: 0) else {
+            return "\(description)"
+        }
+        var pairs:[Range<Int>] = []
+        var maxLen = 0
+        var longestZeroStrikeAt = -1
+        var len:Array<UInt16>.Index = 0
+        var e = uint16bytes.startIndex
+        while s < uint16bytes.endIndex {
+            e = uint16bytes[s...].firstIndex(where: { $0 != 0 }) ?? uint16bytes.endIndex
+            len = e - s
+            if len > maxLen {
+                maxLen = len
+                longestZeroStrikeAt += 1
+            }
+            pairs.append((s..<e))
+            s = uint16bytes[e...].firstIndex(of: 0) ?? uint16bytes.endIndex
+        }
+        if len > maxLen {
+            maxLen = len
+            longestZeroStrikeAt += 1
+        }
+        guard longestZeroStrikeAt > -1 else {
+            return "\(description)"
+        }
+        let a = pairs[longestZeroStrikeAt]
+        
+        let h = uint16bytes[..<a.startIndex].map({
+            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+        }).joined(separator: ":") + ":"
+        let t = ":" + uint16bytes[a.endIndex...].map({
+            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+        }).joined(separator: ":")
+        
+        return h + t
+    }
 }
 extension IPAddress : CustomDebugStringConvertible {
     public var debugDescription: String {
         return description + "/\(cidr.bits)"
     }
+    public var compactDebugDescription:String {
+        return compactDescription + "/\(cidr.bits)"
+    }
 }
+// MARK: -
 extension IPAddress {
     public static let ipv4localhost = IPAddress(2130706432)
     public static let ipv6localhost = IPAddress(0, 1)
     public static let ipv4unspecifiedAddress = IPAddress(0)
     public static let ipv6unspecifiedAddress = IPAddress(0, 0)
-}
-extension IPAddress {
+    // MARK: -
     /// A Boolean value indicating whether this ip address is an unspecified address
     public var isUnspecified:Bool {
         type == .v4 ? sysendianIpv4 == 0 : ipv6lhs == 0 && ipv6rhs == 0
@@ -503,6 +504,7 @@ extension IPAddress {
         guard cidr.bits <= 32, type == .v4 else { return nil }
         return Self.systemIsLittleEndian ? sysendianIpv4 : sysendianIpv4.byteSwapped
     }
+    // MARK: -
     /// Network address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
@@ -557,6 +559,7 @@ extension IPAddress {
             return IPAddress(bytes, cidr: na.cidr.bits)
         }
     }
+    // MARK: -
     /// A boolean value indicating wheter this ip address contains the other ip address
     ///
     /// - Returns: Returns false when address types don't match.
@@ -621,12 +624,33 @@ extension IPAddress {
                 return false
             }
             return other <= ba
-//            guard let na = networkAddress, let ba = broadcastAddress else {
-//                return false
-//            }
-//            return other >= na && other <= ba
         }
     }
+    /// Returns a ip address that is offset the specified distance from this ip address.
+    ///
+    /// - Returns: An ip address that is offset the specified distance from this ip address
+    /// and with the same cidr. Returns `nil` if offset overflows the ip's addressable range.
+    public func advanced(by: Int) -> IPAddress? {
+        // TODO: Implement a variant advanced(by:clampingToNetwork:)
+        guard by != 0 else { return self } // return quickly
+        if type == .v4 {
+            guard let u32 = UInt32(exactly: Int(sysendianIpv4) + by) else { return nil }
+            return IPAddress(u32, cidr: cidr.bits)
+        }
+        else {
+            guard by != Int.min else { return nil } // -Int.min would overflow
+            let (r,ro) = by.signum() > 0 ? ipv6rhs.addingReportingOverflow(UInt64(by)) : ipv6rhs.subtractingReportingOverflow(UInt64(-by))
+            guard ro == false else {
+                let (l,lo) = by.signum() > 0 ? ipv6lhs.addingReportingOverflow(1) : ipv6lhs.subtractingReportingOverflow(1)
+                guard lo == false else {
+                    return nil
+                }
+                return IPAddress(l, r, cidr: cidr.bits)
+            }
+            return IPAddress(ipv6lhs, r, cidr: cidr.bits)
+        }
+    }
+    // MARK: -
     /// Initializes an ipv6 address
     internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
         self.type = .v6
@@ -728,7 +752,7 @@ extension IPAddress {
         UInt16(256).littleEndian & 0x00ff == 0
     }
 }
-
+// MARK: -
 public struct IPAddressIterator : IteratorProtocol {
     public typealias Element = IPAddress
 
@@ -773,6 +797,7 @@ public struct IPAddressIterator : IteratorProtocol {
         }
     }
 }
+// MARK: -
 public struct IPAddressSequence: Sequence {
     public let startAddress: IPAddress
     public let endAddress: IPAddress
