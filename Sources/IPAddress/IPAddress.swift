@@ -507,10 +507,6 @@ extension IPAddress {
     public var rawAddressBytes:Data {
         return Data(networkOrderedAddressBytes)
     }
-    private var ipv4rawValue:UInt32? {
-        guard cidrBits <= Self.validV4CIDRRange.upperBound, type == .v4 else { return nil }
-        return Self.systemIsLittleEndian ? sysendianIpv4 : sysendianIpv4.byteSwapped
-    }
     public var underestimatedHostCount:Int {
         if type == .v4, Self.validV4CIDRRange.contains(cidrBits) {
             let v4:[Int] = [4294967296, 2147483648, 1073741824, 536870912, 268435456, 134217728, 67108864, 33554432, 16777216, 8388608, 4194304, 2097152, 1048576, 524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1]
