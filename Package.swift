@@ -12,7 +12,9 @@ let pkg = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-parsing.git",
-               revision: "0.10.0"),
+                 revision: "0.10.0"),
+        .package(url: "https://github.com/gallinapassus/Table.git",
+                 from: "0.1.0"),
     ],
     targets: [
         .target(
@@ -20,6 +22,6 @@ let pkg = Package(
             dependencies: [.product(name: "Parsing", package: "swift-parsing")]),
         .testTarget(
             name: "IPAddressTests",
-            dependencies: ["IPAddress"]),
+            dependencies: ["IPAddress", "Table"]),
     ]
 )
