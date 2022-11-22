@@ -1283,9 +1283,9 @@ final class PerformanceTests : XCTestCase {
         var elements:[String] = []
         let info = ProcessInfo.processInfo
         elements.append("Operating system \(info.operatingSystemVersionString)")
-        #if os(Linux)
+#if os(Linux)
         elements.append("\(fmttr(Double(info.physicalMemory), " bytes of memory"))")
-        #elseif os(macOS)
+#elseif os(macOS)
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
         var machine = [CChar](repeating: 0,  count: size)
@@ -1295,7 +1295,7 @@ final class PerformanceTests : XCTestCase {
         var measurement = Measurement(value: Double(info.physicalMemory), unit: UnitInformationStorage.bytes)
         measurement.convert(to: UnitInformationStorage.gibibytes)
         elements.append("\(measurement.description) of memory")
-        #endif
+#endif
         return elements.joined(separator: ", ")
     }
     @discardableResult
@@ -1335,7 +1335,7 @@ final class PerformanceTests : XCTestCase {
         let cols = [
             Col("IPAddress API", align: .bottomLeft),
             Col("Measured performance invocations / sec", width: 20, align: .bottomCenter),
-            Col("Type", align: .bottomCenter),
+            Col("Test data type", width: 6, align: .bottomCenter, wrapping: .word),
             Col("Comment", width: 24, align: .bottomCenter, wrapping: .word),
         ]
         
@@ -1350,9 +1350,37 @@ final class PerformanceTests : XCTestCase {
                       columns: cols,
                       cells: cells,
                       frameStyle: .roundedPadded)
-        var out = ""
+        var out = "```\n"
         tbl.render(into: &out)
-        print(out)
+        out += "```\n"
+        var outfile:URL {
+            var root = URL(fileURLWithPath: #file.replacingOccurrences(of: "IPAddress.swift", with: ""))
+            root.appendPathComponent("../../../README.md")
+            return root.standardized
+        }
+        do {
+            let readme =
+            """
+            # IPAddress
+            
+            A concrete type capable of encapsulating both ipv4 and ipv6 addresses.
+            
+            # IPAddressIterator
+            
+            An iterator over the elements of type `IPAddress`.
+            
+            # IPAddressSequence
+            
+            A type providing sequential, iterated access to `IPAddress` elements.
+            
+            # Reference performance
+            
+            """
+            try (readme + out).write(to: outfile, atomically: true, encoding: .utf8)
+        } catch let e {
+            dump(e)
+        }
+        XCTAssertTrue(out.count > 0)
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [

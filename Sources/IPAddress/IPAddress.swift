@@ -740,22 +740,7 @@ extension IPAddress {
     }
     /// Initializes an ipv4 or ipv6 address from Data
     public init?(data:Data, cidr bits:Int? = nil) {
-        switch data.count {
-        case 4:
-            let b = bits ?? Self.validV4CIDRRange.upperBound
-            guard Self.validV4CIDRRange.contains(b) else {
-                return nil
-            }
-            self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: b)
-        case 16:
-            let b = bits ?? Self.validV6CIDRRange.upperBound
-            guard Self.validV6CIDRRange.contains(b) else {
-                return nil
-            }
-            self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: b)
-
-        default: return nil
-        }
+        self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: bits)
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
