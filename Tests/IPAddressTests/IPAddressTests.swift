@@ -1350,7 +1350,9 @@ final class PerformanceTests : XCTestCase {
                       columns: cols,
                       cells: cells,
                       frameStyle: .roundedPadded)
-        print(tbl.render())
+        var out = ""
+        tbl.render(into: &out)
+        print(out)
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [
