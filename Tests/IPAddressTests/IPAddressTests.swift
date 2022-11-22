@@ -563,6 +563,27 @@ final class IPAddressTests: XCTestCase {
     }
     func test_iterator() {
         do { // v4
+            
+            var o1 = IPAddressIterator(address: IPAddress(255, 255, 255, 255, cidr: 31))
+            XCTAssertEqual(o1.next(), IPAddress(0xfffffffe, cidr: 31))
+            XCTAssertEqual(o1.next(), IPAddress(0xffffffff, cidr: 31))
+            XCTAssertNil(o1.next()) // clamped == true
+
+            var o2 = IPAddressIterator(address: IPAddress(0, 0, 255, 255, cidr: 31))
+            XCTAssertEqual(o2.next(), IPAddress(0x0000fffe, cidr: 31))
+            XCTAssertEqual(o2.next(), IPAddress(0x0000ffff, cidr: 31))
+            XCTAssertEqual(o2.next(), IPAddress(0x00010000, cidr: 31)) // clamped == false
+
+            var o3 = IPAddressIterator(address: IPAddress(0, 0, 255, 255, cidr: 31), clamped: true)
+            XCTAssertEqual(o3.next(), IPAddress(0x0000fffe, cidr: 31))
+            XCTAssertEqual(o3.next(), IPAddress(0x0000ffff, cidr: 31))
+            XCTAssertNil(o3.next()) // clamped == true
+
+            var o4 = IPAddressIterator(address: IPAddress(255, 255, 255, 255, cidr: 31), clamped: false)
+            XCTAssertEqual(o4.next(), IPAddress(0xfffffffe, cidr: 31))
+            XCTAssertEqual(o4.next(), IPAddress(0xffffffff, cidr: 31))
+            XCTAssertNil(o4.next()) // clamped == false, but we've reached v4 end
+
             let cidr = 30
             let expected = [
                 IPAddress(192, 168, 13, 4, cidr: cidr),
@@ -572,7 +593,7 @@ final class IPAddressTests: XCTestCase {
             ]
             let ip = IPAddress(192, 168, 13, 6, cidr: cidr)
 
-            var iter = IPAddressIterator(address: ip)
+            var iter = IPAddressIterator(address: ip, clamped: true)
             var index = 0
             while let i = iter.next() {
                 XCTAssertEqual(i, expected[index])
@@ -580,6 +601,27 @@ final class IPAddressTests: XCTestCase {
             }
         }
         do { // v6
+            
+            var o1 = IPAddressIterator(address: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127))
+            XCTAssertEqual(o1.next(), IPAddress(0xffffffffffffffff, 0xfffffffffffffffe, cidr: 127)) // fe
+            XCTAssertEqual(o1.next(), IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127)) // ff
+            XCTAssertNil(o1.next()) // nil
+
+            var o2 = IPAddressIterator(address: IPAddress(0, 0xffffffffffffffff, cidr: 127))
+            XCTAssertEqual(o2.next(), IPAddress(0, 0xfffffffffffffffe, cidr: 127)) // fe
+            XCTAssertEqual(o2.next(), IPAddress(0, 0xffffffffffffffff, cidr: 127)) // ff
+            XCTAssertEqual(o2.next(), IPAddress(0x1, 0x0, cidr: 127)) // clamped == false
+
+            var o3 = IPAddressIterator(address: IPAddress(0, 0xffffffffffffffff, cidr: 127), clamped: true)
+            XCTAssertEqual(o3.next(), IPAddress(0, 0xfffffffffffffffe, cidr: 127)) // fe
+            XCTAssertEqual(o3.next(), IPAddress(0, 0xffffffffffffffff, cidr: 127)) // ff
+            XCTAssertNil(o3.next()) // clamped == true
+
+            var o4 = IPAddressIterator(address: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127), clamped: false)
+            XCTAssertEqual(o4.next(), IPAddress(0xffffffffffffffff, 0xfffffffffffffffe, cidr: 127)) // fe
+            XCTAssertEqual(o4.next(), IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127)) // ff
+            XCTAssertNil(o4.next()) // clamped == false, but we've reached v6 end
+
             let cidr = 126
             let expected = [
                 IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xfffc, cidr: cidr),
@@ -588,7 +630,7 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr),
             ]
             let ip = IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr)
-            var iter = IPAddressIterator(address: ip)
+            var iter = IPAddressIterator(address: ip, clamped: true)
             var index = 0
             while let i = iter.next() {
                 XCTAssertEqual(i, expected[index])
@@ -1147,11 +1189,11 @@ final class PerformanceTests : XCTestCase {
         #endif
         let count = UInt64(IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr).underestimatedHostCount) * 5
         for i in 1...iterations {
-            var a = IPAddressIterator(address: IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr))
-            var b = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr))
-            var c = IPAddressIterator(address: IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr))
-            var d = IPAddressIterator(address: IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
-            var e = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
+            var a = IPAddressIterator(address: IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr), clamped: true)
+            var b = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr), clamped: true)
+            var c = IPAddressIterator(address: IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr), clamped: true)
+            var d = IPAddressIterator(address: IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr), clamped: true)
+            var e = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr), clamped: true)
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = a.next() {}
             while let _ = b.next() {}
@@ -1176,11 +1218,11 @@ final class PerformanceTests : XCTestCase {
         var tarr:[Double] = []
         let count = UInt64(IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr).underestimatedHostCount) * 5
         for i in 1...iterations {
-            var a = IPAddressIterator(address: IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr))
-            var b = IPAddressIterator(address: IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr))
-            var c = IPAddressIterator(address: IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr))
-            var d = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr))
-            var e = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr))
+            var a = IPAddressIterator(address: IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr), clamped: true)
+            var b = IPAddressIterator(address: IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr), clamped: true)
+            var c = IPAddressIterator(address: IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr), clamped: true)
+            var d = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr), clamped: true)
+            var e = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr), clamped: true)
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = a.next() {}
             while let _ = b.next() {}

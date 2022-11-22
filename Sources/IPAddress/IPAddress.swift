@@ -752,30 +752,46 @@ extension IPAddress {
 public struct IPAddressIterator : IteratorProtocol {
     public typealias Element = IPAddress
 
-    private (set) public var address:IPAddress
+    private (set) public var address:IPAddress?
     private let limit:IPAddress
+    private let clamped:Bool
     private lazy var isLittleEndian = {
         UInt16(256).littleEndian & 0x00ff == 0
     }()
 
-    public init(address:IPAddress) {
+    public init(address:IPAddress, clamped:Bool = false) {
         self.address = address.networkAddress ?? address
         self.limit = address.broadcastAddress ?? address
+        self.clamped = clamped
     }
 
     mutating public func next() -> Element? {
+        guard let address = self.address else {
+            return nil
+        }
         switch address.type {
         case .v4:
-            guard address <= limit else { return nil }
+            guard address <= limit || clamped == false else { return nil }
+            if address.sysendianIpv4 == UInt32.max {
+                defer {
+                    self.address = nil
+                }
+                return self.address
+            }
             defer {
                 self.address = IPAddress(address.sysendianIpv4 + 1, cidr: address.cidrBits)
             }
             return self.address
         case .v6:
-            guard address <= limit else { return nil }
+            guard address <= limit || clamped == false else {
+                return nil
+            }
             if address.ipv6rhs == UInt64.max {
                 if address.ipv6lhs == UInt64.max {
-                    return nil
+                    defer {
+                        self.address = nil
+                    }
+                    return self.address
                 }
                 else {
                     defer {
