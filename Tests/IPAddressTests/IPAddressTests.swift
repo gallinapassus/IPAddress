@@ -1,6 +1,6 @@
 import XCTest
 @testable import IPAddress
-//import BigInt
+import Table
 
 final class IPAddressTests: XCTestCase {
     func test_IPAddress_init() {
@@ -9,9 +9,9 @@ final class IPAddressTests: XCTestCase {
         for i in IPAddress.validV4CIDRRange {
             switch i {
             case 4, 16:
-                XCTAssertNotNil(IPAddress(Array<UInt8>(repeating: 0, count: i)), "\(i)")
+                XCTAssertNotNil(IPAddress(bytes: Array<UInt8>(repeating: 0, count: i)), "\(i)")
             default:
-                XCTAssertNil(IPAddress(Array<UInt8>(repeating: 0, count: i)))
+                XCTAssertNil(IPAddress(bytes: Array<UInt8>(repeating: 0, count: i)))
             }
         }
         // init?(_ string:String)
@@ -631,7 +631,7 @@ final class IPAddressTests: XCTestCase {
         }
     }
     func test_ipv6_internal_storage() {
-        let a = IPAddress([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])!
+        let a = IPAddress(bytes: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])!
         let b = IPAddress(0x200, 0, 0, 0, 0, 0, 0, 1)
         let c = IPAddress("200::1")!
         XCTAssertEqual(withUnsafeBytes(of: a.ipv6lhs.littleEndian, { Array($0) }), [0, 0, 0, 0, 0, 0, 0, 2])
@@ -821,124 +821,160 @@ final class PerformanceTests : XCTestCase {
         let value = ns / 1_000.0
         return fmttr(value, " µs")
     }
-    private func rate(_ ns:Double, iterations:UInt64) -> String {
+    private func rate(_ ns:Double, iterations:UInt64, postfix:String? = nil) -> String {
         let foo = Double(iterations) / (ns / 1_000_000_000)
-        return fmttr(foo, " invocations/second")
+        return fmttr(foo, postfix ?? "")
     }
-    func perf_ipv4_init_from_uint32(iterations:Int) -> (Double,UInt64) {
+    // MARK: -
+    func perf_ipv4_init_from_abcd(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max)
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 10)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for i in UInt32(0)..<UInt32(UInt16.max) {
+            for _ in range {
+                let ip = (UInt8.random(in: 0...UInt8.max), UInt8.random(in: 0...UInt8.max),
+                          UInt8.random(in: 0...UInt8.max), UInt8.random(in: 0...UInt8.max),
+                          Int.random(in: IPAddress.validV4CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(i)
+                let _ = IPAddress(ip.0, ip.1, ip.2, ip.3, cidr: ip.4)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init(_:_:_:_:cidr:)", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv4_init_from_bytes(iterations:Int) -> (Double,UInt64) {
+    func perf_ipv4_init_from_uint32(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max)
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 10)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for _ in UInt32(0)..<UInt32(UInt16.max) {
-                let byteArray = Array(repeating: UInt8.random(in: 0...255), count: 4)
+            for _ in range {
+                let ip = (UInt32.random(in: 0..<UInt32.max), Int.random(in: IPAddress.validV4CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(byteArray)
+                          let _ = IPAddress(ip.0, cidr: ip.1)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init(_:cidr:)", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv6_init_from_bytes(iterations:Int) -> (Double,UInt64) {
+    func perf_ipv6_init_from_abcdefgh(iterations:Int) -> (String,String,String,Double,UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max)
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 3)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for _ in UInt32(0)..<UInt32(UInt16.max) {
-                let byteArray = Array(repeating: UInt8.random(in: 0...255), count: 16)
+            for _ in range {
+                let ip = (UInt16(1), UInt16.random(in: 0...UInt16.max), UInt16(3),
+                          UInt16.random(in: 0...UInt16.max), UInt16(4), UInt16(5),
+                          UInt16.random(in: 0...UInt16.max), UInt16(7),
+                          Int.random(in: IPAddress.validV6CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(byteArray)
+                let _ = IPAddress(ip.0, ip.1, ip.2, ip.3, ip.4, ip.5, ip.6, ip.7, cidr: ip.8)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init(_:_:_:_:_:_:_:_:cidr:)", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv6_init_from_abcdefgh(iterations:Int) -> (Double,UInt64) {
+    func perf_ipv4_init_from_bytes(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max)
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 10)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for i in UInt16(0)..<UInt16.max {
+            for _ in range {
+                let ip = (Array(repeating: UInt8.random(in: 0...255), count: 4), Int.random(in: IPAddress.validV4CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(0, 0, 0, 0, 0, 0, 0, i)
+                let _ = IPAddress(bytes: ip.0, cidr: ip.1)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init?(bytes:cidr:)", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv4_contains(iterations:Int) -> (Double,UInt64) {
-        let a = IPAddress(127, 0, 0, 1)
-        let b = IPAddress(127, 0, 0, 1, cidr: 8)
-        let c = IPAddress(192, 168, 0, 1, cidr: 20)
-        let d = IPAddress(192, 168, 2, 1)
+    func perf_ipv6_init_from_bytes(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max) * 4
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 4)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for _ in UInt16(0)..<UInt16.max {
+            for _ in range {
+                let ip = (Array(repeating: UInt8.random(in: 0...255), count: 16), Int.random(in: IPAddress.validV4CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = a.contains(a) // true
-                let _ = a.contains(b) // false
-                let _ = c.contains(d) // true
-                let _ = d.contains(b) // false
+                let _ = IPAddress(bytes: ip.0, cidr: ip.1)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init?(bytes:cidr:)", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv6_contains(iterations:Int) -> (Double,UInt64) {
-        let a = IPAddress(0, 0, 0, 0, 0, 0, 0, 1)
-        let b = IPAddress(0, 0, 0, 0, 0, 0, 0, 255, cidr: 64)
-        let c = IPAddress(0xffff, 0, 0, 0, 0, 0, 0, 255, cidr: 64)
-        let d = IPAddress(0xffff, 0, 0, 0, 0, 0xaaaa, 0, 255, cidr: 72)
+    func perf_ipv4_init_from_data(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt(UInt16.max) * 4
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 10)
+        let count = UInt64(range.count)
         for i in 1...iterations {
             var t:UInt64 = 0
-            for _ in UInt16(0)..<UInt16.max {
+            for _ in range {
+                let ip = (Data(Array(repeating: UInt8.random(in: 0...255), count: 4)),
+                          Int.random(in: IPAddress.validV4CIDRRange))
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = a.contains(a) // true
-                let _ = a.contains(b) // false
-                let _ = c.contains(d) // true
-                let _ = d.contains(b) // false
+                let _ = IPAddress(data: ip.0, cidr: ip.1)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init?(data:cidr:)", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_init_from_string(iterations:Int) -> (Double,UInt64) {
-        //print("Generating test strings...", terminator: "")
+    func perf_ipv6_init_from_data(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var tarr:[Double] = []
+        let range = UInt32(0)..<(UInt32(UInt16.max) * 3)
+        let count = UInt64(range.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in range {
+                let ip = (Data(Array(repeating: UInt8.random(in: 0...255), count: 16)),
+                          Int.random(in: IPAddress.validV4CIDRRange))
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(data: ip.0, cidr: ip.1)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".init?(data:cidr:)", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_init_from_string(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var a:[String] = []
         var i:UInt16 = 0
         while i < UInt16.max {
@@ -948,9 +984,8 @@ final class PerformanceTests : XCTestCase {
                 i += 1
             }
         }
-        //print("done")
         var tarr:[Double] = []
-        let count = UInt(a.count)
+        let count = UInt64(a.count)
         for i in 1...iterations {
             var t:UInt64 = 0
             for str in a {
@@ -960,119 +995,219 @@ final class PerformanceTests : XCTestCase {
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), UInt64(count))
+        return (".init?(string:)", "ipv4 & ipv6", "Mix of strings resulting failure / success",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv4_iterator(iterations:Int) -> (Double,UInt64) {
+    // MARK: -
+    func perf_ipv4_contains(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let ip = IPAddress(0, cidr: 10)
-        let count = UInt64(ip.underestimatedHostCount)
-        for i in 1...iterations {
-            var iterator = IPAddressIterator(address: ip)
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            while let _ = iterator.next() {}
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            tarr.append(Double(t1 - t0))
-            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
-        }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
-    func perf_ipv6_iterator(iterations:Int) -> (Double,UInt64) {
-        var tarr:[Double] = []
-        let ip = IPAddress(0, 0, 0, 0, 0, 0, 0, 0, cidr: 105)
-        let count = UInt64(ip.underestimatedHostCount)
-        for i in 1...iterations {
-            var iterator = IPAddressIterator(address: ip)
-            let t0 = DispatchTime.now().uptimeNanoseconds
-            while let _ = iterator.next() {}
-            let t1 = DispatchTime.now().uptimeNanoseconds
-            print("\(i): \(count) invocations in", self.µs(Double(t1-t0)))
-            tarr.append(Double(t1 - t0))
-        }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
-    func perf_ipv4_advanced(iterations:Int) -> (Double,UInt64) {
-        var tarr:[Double] = []
-        let ip = IPAddress(0, 0xf0, 0, 0, cidr: 24)
-        let range = -Int(UInt16.max)...Int(UInt16.max)
-        let count:UInt64 = UInt64(range.count)
+        var tfdict:[Bool:Int] = [:]
+        let range = UInt16(0)..<(UInt16.max/10)
+        let count = UInt64(range.upperBound) * 5
         for i in 1...iterations {
             var t:UInt64 = 0
             for _ in range {
+                let cidr = Int.random(in: 0...IPAddress.validV4CIDRRange.upperBound)
+                let a = IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr)
+                let b = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr)
+                let c = IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr)
+                let d = IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr)
+                let e = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr)
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = ip.advanced(by: i)
+                let r1 = a.contains(a)
+                let r2 = a.contains(b)
+                let r3 = c.contains(d)
+                let r4 = d.contains(b)
+                let r5 = e.contains(c)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
+                tfdict[r1, default: 0] = tfdict[r1, default: 0] + 1
+                tfdict[r2, default: 0] = tfdict[r2, default: 0] + 1
+                tfdict[r3, default: 0] = tfdict[r3, default: 0] + 1
+                tfdict[r4, default: 0] = tfdict[r4, default: 0] + 1
+                tfdict[r5, default: 0] = tfdict[r5, default: 0] + 1
             }
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
             tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+        let sum:Double = Double(tfdict[true, default: 0] + tfdict[false, default: 0])
+        let shr = ((100.0 * Double(tfdict[true, default: 0])/sum).rounded(),
+                   (100.0 * Double(tfdict[false, default: 0])/sum).rounded())
+        let shrStr = "true \(shr.0)%, false \(shr.1)%"
+        return (".contains(other:)", "ipv4", "Randomized addresses \(shrStr)",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv6_advanced(iterations:Int) -> (Double,UInt64) {
+    func perf_ipv6_contains(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let ip = IPAddress(0, 0, 0xf, 0, 0, 0, 0, 0, cidr: 120)
-        let range = -Int(UInt16.max)...Int(UInt16.max)
-        let count:UInt64 = UInt64(range.count)
+        var tfdict:[Bool:Int] = [:]
+        let range = UInt16(0)..<(UInt16.max/10)
+        let count = UInt64(range.upperBound) * 5
         for i in 1...iterations {
             var t:UInt64 = 0
             for _ in range {
+                let cidr = Int.random(in: 0...IPAddress.validV6CIDRRange.upperBound)
+                let a = IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr)
+                let b = IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr)
+                let c = IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr)
+                let d = IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr)
+                let e = IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr)
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = ip.advanced(by: i)
+                let r1 = a.contains(a)
+                let r2 = a.contains(b)
+                let r3 = c.contains(d)
+                let r4 = d.contains(b)
+                let r5 = e.contains(c)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+                tfdict[r1, default: 0] = tfdict[r1, default: 0] + 1
+                tfdict[r2, default: 0] = tfdict[r2, default: 0] + 1
+                tfdict[r3, default: 0] = tfdict[r3, default: 0] + 1
+                tfdict[r4, default: 0] = tfdict[r4, default: 0] + 1
+                tfdict[r5, default: 0] = tfdict[r5, default: 0] + 1
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        let sum:Double = Double(tfdict[true, default: 0] + tfdict[false, default: 0])
+        let shr = ((100.0 * Double(tfdict[true, default: 0])/sum).rounded(),
+                   (100.0 * Double(tfdict[false, default: 0])/sum).rounded())
+        let shrStr = "true \(shr.0)%, false \(shr.1)%"
+        return (".contains(other:)", "ipv6", "Randomized addresses \(shrStr)",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    // MARK: -
+    func perf_ipv4_advanced(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var tarr:[Double] = []
+        let range = -Int(UInt16.max)...Int(UInt16.max)
+        let count:UInt64 = UInt64(range.count) * 5
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for j in range {
+                let a = IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4)
+                let b = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4)
+                let c = IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4)
+                let d = IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max))
+                let e = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max))
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = a.advanced(by: j)
+                let _ = b.advanced(by: j)
+                let _ = c.advanced(by: j)
+                let _ = d.advanced(by: j)
+                let _ = e.advanced(by: j)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
             tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+        return (".advanced(by:clamped:)", "ipv4", "Randomized addresses, not clamped",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv4_description(iterations:Int) -> (Double,UInt64) {
+    func perf_ipv6_advanced(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt64(UInt16.max)
+        let range = -Int(UInt16.max)...Int(UInt16.max)
+        let count:UInt64 = UInt64(range.count) * 5
         for i in 1...iterations {
-            let ip = IPAddress(1, 2, 3, 4)
             var t:UInt64 = 0
-            for _ in UInt16(0)..<UInt16.max {
+            for j in range {
+                let a = IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8)
+                let b = IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8)
+                let c = IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8)
+                let d = IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8)
+                let e = IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8)
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = ip.description
+                let _ = a.advanced(by: j)
+                let _ = b.advanced(by: j)
+                let _ = c.advanced(by: j)
+                let _ = d.advanced(by: j)
+                let _ = e.advanced(by: j)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
             tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+        return (".advanced(by:clamped:)", "ipv6", "Randomized addresses, not clamped",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_ipv6_description(iterations:Int) -> (Double,UInt64) {
+    // MARK: -
+    func perf_ipv4_iterator(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
         var tarr:[Double] = []
-        let count = UInt64(UInt16.max)
+        #if DEBUG
+        let cidr = 15
+        #else
+        let cidr = 10
+        #endif
+        let count = UInt64(IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr).underestimatedHostCount) * 5
         for i in 1...iterations {
-            let ip = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
+            var a = IPAddressIterator(address: IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr))
+            var b = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr))
+            var c = IPAddressIterator(address: IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr))
+            var d = IPAddressIterator(address: IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
+            var e = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = a.next() {}
+            while let _ = b.next() {}
+            while let _ = c.next() {}
+            while let _ = d.next() {}
+            while let _ = e.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let t = t1 - t0
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".next()", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_iterator(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+#if DEBUG
+        let cidr = 113
+#else
+        let cidr = 105
+#endif
+        var tarr:[Double] = []
+        let count = UInt64(IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr).underestimatedHostCount) * 5
+        for i in 1...iterations {
+            var a = IPAddressIterator(address: IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr))
+            var b = IPAddressIterator(address: IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr))
+            var c = IPAddressIterator(address: IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr))
+            var d = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr))
+            var e = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr))
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            while let _ = a.next() {}
+            while let _ = b.next() {}
+            while let _ = c.next() {}
+            while let _ = d.next() {}
+            while let _ = e.next() {}
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let t = t1 - t0
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".next()", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    // MARK: -
+    func perf_ipv4_description(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max) * 5
+        for i in 1...iterations {
             var t:UInt64 = 0
             for _ in UInt16(0)..<UInt16.max {
-                let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = ip.description
-                let t1 = DispatchTime.now().uptimeNanoseconds
-                t += (t1 - t0)
-            }
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
-            tarr.append(Double(t))
-        }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
-    func perf_ipv6_compactDescription(iterations:Int) -> (Double,UInt64) {
-        var tarr:[Double] = []
-        let count = UInt64(UInt16.max)
-        for i in 1...iterations {
-            let a = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
-            let b = IPAddress(1, 2, 3, 0, 0, 6, 7, 8)
-            let c = IPAddress(1, 2, 3, 0, 0, 0, 7, 8)
-            let d = IPAddress(1, 0, 0, 4, 0, 0, 7, 8)
-            let e = IPAddress(1, 0, 0, 4, 0, 0, 0, 8)
-            var t:UInt64 = 0
-            for _ in UInt16(0)..<UInt16.max {
+                let a = IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4)
+                let b = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4)
+                let c = IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4)
+                let d = IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max))
+                let e = IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max))
                 let t0 = DispatchTime.now().uptimeNanoseconds
                 let _ = a.description
                 let _ = b.description
@@ -1082,11 +1217,67 @@ final class PerformanceTests : XCTestCase {
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
-            print("\(i): \(count) invocations in", self.µs(Double(t)))
             tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+        return (".description", "ipv4", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
+    func perf_ipv6_description(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max) * 5
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let a = IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8)
+                let b = IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8)
+                let c = IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8)
+                let d = IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8)
+                let e = IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8)
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = a.description
+                let _ = b.description
+                let _ = c.description
+                let _ = d.description
+                let _ = e.description
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".description", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_ipv6_compactDescription(iterations:Int) -> (String,String,String,Double,UInt64) {
+        print(#function)
+        var tarr:[Double] = []
+        let count = UInt64(UInt16.max) * 5
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for _ in UInt16(0)..<UInt16.max {
+                let a = IPAddress(1, UInt16.random(in: 0...UInt16.max), 0, 0, 5, 0, 0, 8)
+                let b = IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 0, 0, 6, 7, 8)
+                let c = IPAddress(1, 0, 0, UInt16.random(in: 0...UInt16.max), 0, 0, 0, 8)
+                let d = IPAddress(1, 0, 0, 4, UInt16.random(in: 0...UInt16.max), 0, 7, 8)
+                let e = IPAddress(1, 0, 0, 4, 0, UInt16.random(in: 0...UInt16.max), 0, 8)
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = a.compactDescription
+                let _ = b.compactDescription
+                let _ = c.compactDescription
+                let _ = d.compactDescription
+                let _ = e.compactDescription
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".compactDescription", "ipv6", "Randomized addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    // MARK: -
     func hwspec() -> String {
         // system_profiler SPSoftwareDataType SPHardwareDataType
         var elements:[String] = []
@@ -1107,36 +1298,59 @@ final class PerformanceTests : XCTestCase {
         #endif
         return elements.joined(separator: ", ")
     }
-    func runit(name:String, _ f: (Int)->(Double,UInt64)) {
-        print("##", name)
-        print("### \(hwspec())")
-        #if DEBUG
-        print("### Build: Debug")
-        #else
-        print("### Build: Release")
-        #endif
-        print("```")
-        let (avg, count) = f(3)
-        print("==============================================")
-        print("Average:", rate(avg, iterations: count))
-        print("```")
+    @discardableResult
+    func runit(_ f: (Int)->(String, String, String, Double, UInt64)) -> (String, String, String, Double, UInt64) {
+#if DEBUG
+        f(2)
+#else
+        f(5)
+#endif
     }
         // system_profiler SPSoftwareDataType SPHardwareDataType
     func test_run_all_perf_tests() {
-        runit(name: "IPAddress .init(uint32:) performance (ipv4)", perf_ipv4_init_from_uint32(iterations:))
-        runit(name: "IPAddress .init(abcdefgh:) performance (ipv6)", perf_ipv6_init_from_abcdefgh(iterations:))
-        runit(name: "IPAddress .init(bytes:) performance (ipv4)", perf_ipv4_init_from_bytes(iterations:))
-        runit(name: "IPAddress .init(bytes:) performance (ipv6)", perf_ipv6_init_from_bytes(iterations:))
-        runit(name: "IPAddress .init(string:) performance (ipv4 & ipv6)", perf_init_from_string(iterations:))
-        runit(name: "IPAddress .contains(other:) performance (ipv4)", perf_ipv4_contains(iterations:))
-        runit(name: "IPAddress .contains(other:) performance (ipv6)", perf_ipv6_contains(iterations:))
-        runit(name: "IPAddress .advanced(by:) performance (ipv4)", perf_ipv4_advanced(iterations:))
-        runit(name: "IPAddress .advanced(by:) performance (ipv6)", perf_ipv6_advanced(iterations:))
-        runit(name: "IPAddressIterator .next() performance (ipv4)", perf_ipv4_iterator(iterations:))
-        runit(name: "IPAddressIterator .next() performance (ipv6)", perf_ipv6_iterator(iterations:))
-        runit(name: "IPAddress .description performance (ipv4)", perf_ipv4_description(iterations:))
-        runit(name: "IPAddress .description performance (ipv6)", perf_ipv6_description(iterations:))
-        runit(name: "IPAddress .compactDescription performance (ipv6)", perf_ipv6_compactDescription(iterations:))
+        var averages:[(String, String, String, Double, UInt64)] = []
+        averages.append(runit(perf_ipv4_init_from_abcd(iterations:)))
+        averages.append(runit(perf_ipv4_init_from_uint32(iterations:)))
+        averages.append(runit(perf_ipv6_init_from_abcdefgh(iterations:)))
+        averages.append(runit(perf_ipv4_init_from_bytes(iterations:)))
+        averages.append(runit(perf_ipv6_init_from_bytes(iterations:)))
+        averages.append(runit(perf_ipv4_init_from_data(iterations:)))
+        averages.append(runit(perf_ipv6_init_from_data(iterations:)))
+        averages.append(runit(perf_init_from_string(iterations:)))
+
+        averages.append(runit(perf_ipv4_contains(iterations:)))
+        averages.append(runit(perf_ipv6_contains(iterations:)))
+
+        averages.append(runit(perf_ipv4_advanced(iterations:)))
+        averages.append(runit(perf_ipv6_advanced(iterations:)))
+
+        averages.append(runit(perf_ipv4_iterator(iterations:)))
+        averages.append(runit(perf_ipv6_iterator(iterations:)))
+
+        averages.append(runit(perf_ipv4_description(iterations:)))
+        averages.append(runit(perf_ipv6_description(iterations:)))
+        averages.append(runit(perf_ipv6_compactDescription(iterations:)))
+
+        var cells:[[Txt]] = []
+        let cols = [
+            Col("IPAddress API", align: .bottomLeft),
+            Col("Measured performance invocations / sec", width: 20, align: .bottomCenter),
+            Col("Type", align: .bottomCenter),
+            Col("Comment", width: 24, align: .bottomCenter, wrapping: .word),
+        ]
+        
+        averages.forEach { (api, addrType, comment, time, invCount) in
+            let r = rate(time, iterations: invCount)
+            cells.append([Txt(api),
+                          Txt(r, align: .bottomRight),
+                          Txt(addrType, align: .bottomCenter),
+                          Txt(comment, align: .topLeft)])
+        }
+        let tbl = Tbl("Performance test summary for \(hwspec())",
+                      columns: cols,
+                      cells: cells,
+                      frameStyle: .roundedPadded)
+        print(tbl.render())
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [

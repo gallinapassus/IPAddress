@@ -125,7 +125,7 @@ public struct IPAddress : Codable {
     ///
     /// Initializes an ipv4 or ipv6 address from given UInt8 bytes.
     /// Bytes must be in big endian byte order (a.k.a. network byte order).
-    public init?(_ bytes:[UInt8], cidr bits:Int? = nil) {
+    public init?(bytes:[UInt8], cidr bits:Int? = nil) {
         switch bytes.count {
         case 4:
             let b = bits ?? Self.validV4CIDRRange.upperBound
@@ -526,7 +526,7 @@ extension IPAddress {
     /// (is a single end point). Othervice returns network address of the network this ip belongs to with cidr set to
     /// the corresponding network.
     public var networkAddress:IPAddress? {
-        return IPAddress(zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
+        return IPAddress(bytes: zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
     }
     /// Router address of the network this ip address belongs to
     ///
@@ -550,7 +550,7 @@ extension IPAddress {
                 netAddrBytes[i] = netAddrBytes[i] + 1
                 break
             }
-            return IPAddress(netAddrBytes, cidr: cidrBits)
+            return IPAddress(bytes: netAddrBytes, cidr: cidrBits)
         }
     }
     /// Broadcast address of the network this ip address belongs to
@@ -571,7 +571,7 @@ extension IPAddress {
                 return nil
             }
             let bytes = zip(networkOrderedAddressBytes, networkMask.map({ ~$0 })).map { $0 | $1 }
-            return IPAddress(bytes, cidr: na.cidrBits)
+            return IPAddress(bytes: bytes, cidr: na.cidrBits)
         }
     }
     // MARK: -
@@ -746,13 +746,13 @@ extension IPAddress {
             guard Self.validV4CIDRRange.contains(b) else {
                 return nil
             }
-            self.init(data.withUnsafeBytes({ Array($0) }), cidr: b)
+            self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: b)
         case 16:
             let b = bits ?? Self.validV6CIDRRange.upperBound
             guard Self.validV6CIDRRange.contains(b) else {
                 return nil
             }
-            self.init(data.withUnsafeBytes({ Array($0) }), cidr: b)
+            self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: b)
 
         default: return nil
         }
