@@ -20,43 +20,43 @@ A type providing sequential, iterated access to `IPAddress` elements.
 │                              │ Measured performance │  data  │                          │
 │ IPAddress API                │  invocations / sec   │  type  │         Comment          │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init(_:_:_:_:cidr:)         │           15 950 199 │  ipv4  │ Randomized addresses     │
+│ .init(_:_:_:_:cidr:)         │           16 000 513 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init(_:cidr:)               │           15 848 609 │  ipv4  │ Randomized addresses     │
+│ .init(_:cidr:)               │           15 936 775 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init(_:_:_:_:_:_:_:_:cidr:) │           14 824 750 │  ipv6  │ Randomized addresses     │
+│ .init(_:_:_:_:_:_:_:_:cidr:) │           15 328 049 │  ipv6  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init?(bytes:cidr:)          │           12 827 483 │  ipv4  │ Randomized addresses     │
+│ .init?(bytes:cidr:)          │           13 555 957 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init?(bytes:cidr:)          │           12 842 280 │  ipv6  │ Randomized addresses     │
+│ .init?(bytes:cidr:)          │           13 444 892 │  ipv6  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init?(data:cidr:)           │            8 014 889 │  ipv4  │ Randomized addresses     │
+│ .init?(data:cidr:)           │            8 421 314 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .init?(data:cidr:)           │            7 418 543 │  ipv6  │ Randomized addresses     │
+│ .init?(data:cidr:)           │            7 737 007 │  ipv6  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
 │                              │                      │  ipv4  │ Mix of strings resulting │
-│ .init?(string:)              │              105 556 │ & ipv6 │ failure / success        │
+│ .init?(string:)              │              103 779 │ & ipv6 │ failure / success        │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
 │                              │                      │        │ Randomized addresses     │
-│ .contains(other:)            │            1 752 889 │  ipv4  │ true 44.0%, false 56.0%  │
+│ .contains(other:)            │            1 842 621 │  ipv4  │ true 44.0%, false 56.0%  │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
 │                              │                      │        │ Randomized addresses     │
-│ .contains(other:)            │            1 085 147 │  ipv6  │ true 54.0%, false 46.0%  │
+│ .contains(other:)            │              920 516 │  ipv6  │ true 53.0%, false 47.0%  │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
 │                              │                      │        │ Randomized               │
-│ .advanced(by:clamped:)       │           13 581 051 │  ipv4  │ addresses, not clamped   │
+│ .advanced(by:clamped:)       │           13 569 353 │  ipv4  │ addresses, not clamped   │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
 │                              │                      │        │ Randomized               │
-│ .advanced(by:clamped:)       │           20 555 381 │  ipv6  │ addresses, not clamped   │
+│ .advanced(by:clamped:)       │           20 442 607 │  ipv6  │ addresses, not clamped   │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .next()                      │           24 687 644 │  ipv4  │ Randomized addresses     │
+│ .next()                      │           25 310 071 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .next()                      │           21 275 216 │  ipv6  │ Randomized addresses     │
+│ .next()                      │           21 621 497 │  ipv6  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .description                 │            5 170 770 │  ipv4  │ Randomized addresses     │
+│ .description                 │            5 301 435 │  ipv4  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .description                 │            1 662 381 │  ipv6  │ Randomized addresses     │
+│ .description                 │            1 782 647 │  ipv6  │ Randomized addresses     │
 ├──────────────────────────────┼──────────────────────┼────────┼──────────────────────────┤
-│ .compactDescription          │            1 480 767 │  ipv6  │ Randomized addresses     │
+│ .compactDescription          │            1 609 473 │  ipv6  │ Randomized addresses     │
 ╰──────────────────────────────┴──────────────────────┴────────┴──────────────────────────╯
 ```
