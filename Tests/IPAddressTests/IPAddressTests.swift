@@ -1205,7 +1205,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".next()", "ipv4", "Randomized addresses",
+        return (".next()", "ipv4", "Randomized addresses, clamped",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     func perf_ipv6_iterator(iterations:Int) -> (String, String, String, Double, UInt64) {
@@ -1234,7 +1234,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".next()", "ipv6", "Randomized addresses",
+        return (".next()", "ipv6", "Randomized addresses, clamped",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     // MARK: -
