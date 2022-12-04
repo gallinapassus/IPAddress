@@ -773,8 +773,23 @@ final class IPAddressTests: XCTestCase {
         }
     }
     func test_string_parsing_options() {
-        XCTAssertEqual(IPAddress(string: "ABCD::")?.compactDescription, "abcd::")
-        XCTAssertEqual(IPAddress(string: "ABCD::", options: .noUppercase)?.compactDescription, nil)
+        XCTAssertEqual(IPAddress(string: "ABCD::")?.compactDescription, "abcd::") // default is to accept uppercase
+        XCTAssertEqual(IPAddress(string: "ABCD::", options: .ipv6Only)?.compactDescription, "abcd::") // ok
+        XCTAssertEqual(IPAddress(string: "192.168.5.4", options: .ipv4Only)?.compactDescription, "192.168.5.4") // ok
+
+        XCTAssertNil(IPAddress(string: "ABCD::", options: .ipv4Only))
+        XCTAssertNil(IPAddress(string: "ABCD::", options: .noUppercase))
+        XCTAssertNil(IPAddress(string: "ABCD::", options: [.ipv6Only, .noUppercase]))
+        XCTAssertNil(IPAddress(string: "192.168.5.4", options: .ipv6Only))
+        XCTAssertNil(IPAddress(string: "ABCD::", options: .ipv4Only))
+        
+        XCTAssertEqual(IPAddress(string: "0123::")?.compactDescription, "123::") // default is to accept leading zeros
+        XCTAssertNil(IPAddress(string: "0123::", options: .noLeadingZeros))
+        XCTAssertEqual(IPAddress(string: "010.1.1.1")?.compactDescription, "10.1.1.1") // default is to accept leading zeros
+
+        XCTAssertNil(IPAddress(string: "abcd::", options: .noZeroSupression))
+        XCTAssertNil(IPAddress(string: "::abcd", options: .noZeroSupression))
+        XCTAssertNil(IPAddress(string: "beef::abcd", options: .noZeroSupression))
     }
     /*
     func test_parser() {
@@ -1837,7 +1852,10 @@ let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
     ("a::c::b", nil, nil), // 2 x :: not allowed
     ("0:1:A:B:C:D:E:F", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // uppercase
     ("0:1:a:b:c:d:e:f", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // lowercase
+    ("123", nil, nil), // not enough data to determine address type
     (":", nil, nil),
+    (":.", nil, nil),
+    (".:", nil, nil),
     ("::", IPAddress(0, 0, 0, 0, 0, 0, 0, 0), "::"),
     (":::", nil, nil),
     ("::::", nil, nil),

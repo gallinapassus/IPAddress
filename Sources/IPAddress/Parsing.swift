@@ -263,8 +263,16 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
     let maskInsertionPoint:UInt16 = 0b0000_0000_1111_0000
     let maskCidr:UInt16 =           0b1111_1111_0000_0000
     
-    var bm:UInt16 = maskAddressType | 0b0000_0000_1000_0000 | maskCidr
-    
+    var bm:UInt16 = 0b0000_0000_1000_0000 | maskCidr
+    if opts.contains(.ipv4Only) {
+        bm |= IPAddress.IPAddrType.v4.rawValue
+    }
+    else if opts.contains(.ipv6Only) {
+        bm |= IPAddress.IPAddrType.v6.rawValue
+    }
+    else {
+        bm |= maskAddressType
+    }
     //     ┌─────────────── cidr
     // ┌───┴───┐ ┌──┬────── insertion point
     // 0000.0000.0000.0000
@@ -281,8 +289,14 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
         if hd == 58 {
             // Set zeroBit to false
             bm &= ~maskZeroBit
-            // Set addressType to ipv6
-            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            if (bm & maskAddressType) == maskAddressType {
+                // Set addressType to ipv6
+                bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            }
+            else if (bm & maskAddressType) != IPAddress.IPAddrType.v6.rawValue {
+                // address type was earlier "locked" to ipv4
+                return nil
+            }
             // Check for ipv6 digit overflow
             guard digitStack.count < 5 else {
                 return nil // too many digits for ipv6
@@ -299,6 +313,10 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
                 // Have we already seen '::' before?
                 guard (bm & maskInsertionPoint) == 0b1000_0000 else {
                     return nil // Yes, this is now a subsequent '::', only one '::' is allowed
+                }
+                if opts.contains(.noZeroSupression) {
+                    // zero suppression not allowed
+                    return nil
                 }
                 // Save the insertion point
                 bm = (bm & ~maskInsertionPoint) | (UInt16(u16Stack.count) << 4)
@@ -323,7 +341,14 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
             // Set zeroBit to false
             bm &= ~maskZeroBit
             // Set addressType to ipv4
-            bm = bm & ~maskAddressType
+            if (bm & maskAddressType) == maskAddressType {
+                // Set addressType to ipv4
+                bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v4.rawValue
+            }
+            else if (bm & maskAddressType) != IPAddress.IPAddrType.v4.rawValue {
+                // address type was earlier "locked" to ipv6
+                return nil
+            }
             // Check for ipv4 digit overflow
             guard digitStack.count < 4 else {
                 return nil // too many digits for ipv4
@@ -349,8 +374,6 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
                 // We have more than one consecutive colons, this is not allowed for ipv4 addresses
                 return nil
             }
-            // Set address type
-            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v4.rawValue
             // Reset the digit stack, keep capacity
             digitStack.removeAll(keepingCapacity: true)
             // append segment value
@@ -415,12 +438,19 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
             // append digit value
             digitStack.append(hd - 87)
             // set address type
-            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            if (bm & maskAddressType) == maskAddressType {
+                // Set addressType to ipv6
+                bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            }
+            else if (bm & maskAddressType) != IPAddress.IPAddrType.v6.rawValue {
+                // address type was earlier "locked" to ipv4
+                return nil
+            }
             // reset consecutive separator count
             consecutiveSeparatorCount = 0
         }
         // A-F
-        else if opts.contains(.noUppercase) == false, (65...70).contains(hd) {
+        else if (65...70).contains(hd), opts.contains(.noUppercase) == false {
             // :ABCD must fail
             if i == iii.index(after: iii.startIndex), consecutiveSeparatorCount == 1 {
                 //print("invalid format", #line)
@@ -432,7 +462,14 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
             // append digit value
             digitStack.append(hd - 55)
             // set address type
-            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            if (bm & maskAddressType) == maskAddressType {
+                // Set addressType to ipv6
+                bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            }
+            else if (bm & maskAddressType) != IPAddress.IPAddrType.v6.rawValue {
+                // address type was earlier "locked" to ipv4
+                return nil
+            }
             // reset consecutive separator count
             consecutiveSeparatorCount = 0
         }
@@ -441,47 +478,27 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
             return nil
         }
     }
-
+    
     // process remaining last segment
-    if (bm & maskAddressType) == IPAddress.IPAddrType.v6.rawValue {
-        // Check for digit and segment overflow
-        guard (digitStack.isEmpty == false || bm & maskInsertionPoint != maskInsertionPoint), digitStack.count < 5, u16Stack.count < 8 else {
-            return nil
-        }
-        // Set address segment values
-        var u16:UInt16 = 0
-        for hd in digitStack {
-            u16 = (u16 << 4) + UInt16(hd)
-        }
-        u16Stack.append(u16)
-    }
-    else if (bm & maskAddressType) == IPAddress.IPAddrType.v4.rawValue {
+    if (bm & maskAddressType) == IPAddress.IPAddrType.v4.rawValue {
+        
         // Check for digit and segment overflow
         guard digitStack.isEmpty == false, digitStack.count < 4, u16Stack.count < 4 else {
             return nil
         }
         // Set address segment values
         var u16:UInt16 = 0
-        for (i,hd) in digitStack.reversed().enumerated() {
-            var p:UInt16 = 1
-            for _ in 0..<i {
-                p = p * 10
-            }
+        var p:UInt16 = 1
+        for hd in digitStack.reversed() {
             u16 += (p * UInt16(hd))
+            p *= 10
         }
         // Check for ipv4 segment value overflow
         guard u16 < 256 else {
             return nil
         }
         u16Stack.append(u16)
-    }
-    else {
-        // unknown address type
-        return nil
-    }
-
-    // Check address segment counts and fill in the blanks if needed
-    if (bm & maskAddressType) == IPAddress.IPAddrType.v4.rawValue {
+        
         // Do we have all required 4 segments of an ipv4 address
         guard u16Stack.count == 4 else {
             return nil
@@ -496,6 +513,18 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
         return IPAddress(bytes: u8, cidr: cidr)
     }
     else if (bm & maskAddressType) == IPAddress.IPAddrType.v6.rawValue {
+        
+        // Check for digit and segment overflow
+        guard (digitStack.isEmpty == false || bm & maskInsertionPoint != maskInsertionPoint), digitStack.count < 5, u16Stack.count < 8 else {
+            return nil
+        }
+        // Set address segment values
+        var u16:UInt16 = 0
+        for hd in digitStack {
+            u16 = (u16 << 4) + UInt16(hd)
+        }
+        u16Stack.append(u16)
+        
         // Do we have all required 8 segments of an ipv4 address
         let cidr = (bm & maskCidr) == maskCidr ?
         IPAddress.validV6CIDRRange.upperBound
@@ -507,14 +536,15 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
                 return nil // No wildcard '::' and we don't have enough segments
             }
             // Insertion elements
-            let insert = Array(repeating: UInt16(0), count: Swift.max(0, 8 - /*segmentIndex*/u16Stack.count))
+            let insert = Array(repeating: UInt16(0), count: Swift.max(0, 8 - u16Stack.count))
             // Insert
-            u16Stack.insert(contentsOf: insert, at: /*insertionPoint*/ Int((bm & maskInsertionPoint) >> 4))
+            u16Stack.insert(contentsOf: insert, at: Int((bm & maskInsertionPoint) >> 4))
             // Initialize ipv6 address
             return IPAddress(u16Stack[0], u16Stack[1], u16Stack[2], u16Stack[3], u16Stack[4], u16Stack[5], u16Stack[6], u16Stack[7], cidr: Int(cidr))
         }
         // Initialize ipv6 address
         return IPAddress(u16Stack[0], u16Stack[1], u16Stack[2], u16Stack[3], u16Stack[4], u16Stack[5], u16Stack[6], u16Stack[7], cidr: Int(cidr))
     }
+    // was not able to determine address type
     return nil
 }
