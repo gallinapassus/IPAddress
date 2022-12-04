@@ -252,272 +252,269 @@ internal struct IPv6AddressParser<Input:Collection> : Parser {
     }
 }
 
-internal func alt_parser(_ str:String) -> IPAddress? {
+internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) -> IPAddress? {
+    let opts = options ?? IPAddress.ParsingOptions()
     let iii = str.indices
-    var headDigitStack:[UInt8] = []
-    var u16:[UInt16] = Array(repeating: 0, count: 8)
-    var digitCount:Int = 0
-    var ccc:Int = 0 // consecutive colon count
-    var sc:Int = 0 // segment count
-    // var atype:UInt16? = nil
-    var insertionPoint:Int = -1
-    //var zeroBit:Bool = false
-    let relaxed:Bool = true
-    var cidr:UInt8? = nil
+    var digitStack:[UInt8] = []
+    var u16Stack:[UInt16] = []
+    var consecutiveSeparatorCount:Int = 0
     let maskAddressType:UInt16 =    0b0000_0000_0000_0011
     let maskZeroBit:UInt16 =        0b0000_0000_0000_0100
-    let maskRelaxed:UInt16 =        0b0000_0000_0000_1000
     let maskInsertionPoint:UInt16 = 0b0000_0000_1111_0000
     let maskCidr:UInt16 =           0b1111_1111_0000_0000
-    var bm:UInt16 = maskAddressType
-
+    
+    var bm:UInt16 = maskAddressType | 0b0000_0000_1000_0000 | maskCidr
+    
     //     ┌─────────────── cidr
     // ┌───┴───┐ ┌──┬────── insertion point
     // 0000.0000.0000.0000
     //                ││└┴─ addressType
     //                │└─── zeroBit
-    //                └──── relaxed
-
-//    bm |= maskZeroBit // set true
-//    bm ^= maskZeroBit // toggle
+    //                └──── reserved for future use
 
     for i in iii {
-        if let hd = str[i].asciiValue, hd > 45, hd < 103 {
-            // :
-            if hd == 58 {
-                //zeroBit = false
-                bm &= ~maskZeroBit // set false
-                if /*atype == nil*/ (bm & maskAddressType) == maskAddressType {
-                    //atype = 1 // v6
-                    bm = (bm & ~maskAddressType) | 1
-                }
-                guard headDigitStack.count < 5 else {
-                    //print("invalid format, too many digits", #line)
-                    return nil
-                }
-                for hd in headDigitStack {
-                    u16[sc] = (u16[sc] << 4) + UInt16(hd)
-                }
-                headDigitStack.removeAll(keepingCapacity: true)
-                digitCount = 0
-                ccc += 1
-                if ccc == 2 {
-                    if insertionPoint != -1 {
-//                    if outi != str.indices.endIndex {
-                        //print("multiple ::", #line)
-                        return nil
-                    }
-                    //outi = i
-                    insertionPoint = sc
-                }
-                else if ccc > 2 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                if i == iii.index(before: str.endIndex), ccc != 2 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-            }
-            // .
-            else if hd == 46 {
-                //zeroBit = false
-                bm &= ~maskZeroBit // set false
-                if /*atype == nil*/ (bm & maskAddressType) == maskAddressType {
-                    // atype = 0 // v4
-                    bm = bm & ~maskAddressType
-                }
-                guard headDigitStack.count < 4 else {
-                    //print("invalid format, too many digits", #line)
-                    return nil
-                }
-                for (i,hd) in headDigitStack.reversed().enumerated() {
-                    var p:UInt16 = 1
-                    for _ in 0..<i {
-                        p = p * 10
-                    }
-                    u16[sc] += (p * UInt16(hd))
-                }
-                guard u16[sc] < 256 else {
-                    //print("overflow '\(u16[sc])'", #line)
-                    return nil
-                }
-                digitCount = 0
-                ccc += 1
-                if ccc == 2 {
-                    if insertionPoint != -1 {
-//                    if outi != str.indices.endIndex {
-                        //print("multiple ..", #line)
-                        return nil
-                    }
-//                    outi = i
-                    insertionPoint = sc
-                    //print("breaking out", #line)
-                    break
-                }
-                headDigitStack.removeAll(keepingCapacity: true)
-            }
-            // /
-            else if hd == 47 {
-                guard ccc == 0 || ccc == 2 else {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                guard let c = UInt8(str[iii.index(after: i)...]) else {
-                    //print("invalid cidr '\(str[iii.index(after: i)...])'")
-                    return nil
-                }
-                cidr = c
-                //print("cidr", UInt8(str[iii.index(after: i)...]) as Any)
-                //zeroBit = false
-                bm &= ~maskZeroBit // set false
-                digitCount = 0
-                break
-            }
-            // 0 - 9
-            else if hd < 58 {
-                // :1234 must fail
-                if i == iii.index(after: iii.startIndex), ccc == 1 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                if /*zeroBit*/ (bm & maskZeroBit) > 0 {
-                    //print("invalid leading zero", #line)
-                    return nil
-                }
-                //zeroBit = hd == 48 && digitCount == 0
-                bm = (hd == 48 && digitCount == 0) ? (bm | maskZeroBit) : (bm & ~maskZeroBit)
-                headDigitStack.append(hd - 48)
-                digitCount += 1
-                ccc = 0
-            }
-            // a-f
-            else if hd > 96 {
-                // :abcd must fail
-                if i == iii.index(after: iii.startIndex), ccc == 1 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                if /*zeroBit*/ (bm & maskZeroBit) > 0 {
-                    //print("invalid leading zero", #line)
-                    return nil
-                }
-                headDigitStack.append(hd - 87)
-                digitCount += 1
-                bm = (bm & ~maskAddressType) | 1 // atype = 1
-                ccc = 0
-            }
-            else if relaxed, (65...70).contains(hd) {
-                // :ABCD must fail
-                if i == iii.index(after: iii.startIndex), ccc == 1 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                if /*zeroBit*/ (bm & maskZeroBit) > 0 {
-                    //print("invalid leading zero", #line)
-                    return nil
-                }
-                
-                headDigitStack.append(hd - 55)
-                digitCount += 1
-                bm = (bm & ~maskAddressType) | 1 // atype = 1
-                ccc = 0
-            }
-            else {
-                //print("invalid char '\(str[i])'", #line)
-                return nil
-            }
-            if /*atype == nil*/ (bm & maskAddressType) == maskAddressType {
-                if hd > 96 {
-                    // addresstype had not yet been resolved and we've got a|b|c|d|e|f
-                    // from now on, let's assume this is a v6 address
-                    //print("looks like an v6 address")
-                    bm = (bm & ~maskAddressType) | 1 // atype = 1
-                } // else ... we don't know yet
-            }
-            if digitCount == 0, i != iii.first {
-                sc += 1
-                if /*atype == 1*/(bm & maskAddressType) == 1, sc > 7 {
-                    //print("too many segments", #line)
-                    return nil
-                }
-                else if /*atype == 0*/(bm & maskAddressType) == 0, sc > 3 {
-                    //print("too many segments", #line)
-                    return nil
-                }
-            }
-        }
-        else {
-            //print("invalid char '\(str[i])'", #line)
+        guard let hd = str[i].asciiValue, hd > 45, hd < 103 else {
+            // invalid character
             return nil
         }
-        //print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '\(str[i])'    /\(cidr)    \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "??" : addressType! == 0 ? "v4":"v6")    \(u16)    \(headDigitStack)")
-    }
-    // process remaining last segment
-    if /*let addressType = atype*/ (bm & maskAddressType) != maskAddressType { // maybe this is not needed at all
-        if /*addressType == 1*/(bm & maskAddressType) == 1 {
-            for hd in headDigitStack {
-                u16[sc] = (u16[sc] << 4) + UInt16(hd)
+        // Colon ':'
+        if hd == 58 {
+            // Set zeroBit to false
+            bm &= ~maskZeroBit
+            // Set addressType to ipv6
+            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            // Check for ipv6 digit overflow
+            guard digitStack.count < 5 else {
+                return nil // too many digits for ipv6
             }
+            // Set the u16 value
+            var u16:UInt16 = 0
+            for digit in digitStack {
+                u16 = (u16 << 4) + UInt16(digit)
+            }
+            // Increment the consecutive separator counter
+            consecutiveSeparatorCount += 1
+            // Check if we have '::'
+            if consecutiveSeparatorCount == 2 {
+                // Have we already seen '::' before?
+                guard (bm & maskInsertionPoint) == 0b1000_0000 else {
+                    return nil // Yes, this is now a subsequent '::', only one '::' is allowed
+                }
+                // Save the insertion point
+                bm = (bm & ~maskInsertionPoint) | (UInt16(u16Stack.count) << 4)
+            }
+            // Check if we have ':::' (or more)
+            else if consecutiveSeparatorCount > 2 {
+                // More than two colons are not allowed
+                return nil
+            }
+            // Check if we have a single ':' at the end
+            if i == iii.index(before: str.endIndex), consecutiveSeparatorCount != 2 {
+                // Yes, address ends with single ':'. Single ':' at the end is not allowed.
+                return nil
+            }
+            // Reset the digit stack, keep capacity
+            digitStack.removeAll(keepingCapacity: true)
+            // append segment value
+            u16Stack.append(u16)
         }
-        else if /*addressType == 0*/(bm & maskAddressType) == 0 {
-            for (i,hd) in headDigitStack.reversed().enumerated() {
+        // Dot '.'
+        else if hd == 46 {
+            // Set zeroBit to false
+            bm &= ~maskZeroBit
+            // Set addressType to ipv4
+            bm = bm & ~maskAddressType
+            // Check for ipv4 digit overflow
+            guard digitStack.count < 4 else {
+                return nil // too many digits for ipv4
+            }
+            // Set the u16 value
+            var u16:UInt16 = 0
+            for (i,hd) in digitStack.reversed().enumerated() {
                 var p:UInt16 = 1
                 for _ in 0..<i {
                     p = p * 10
                 }
-                u16[sc] += (p * UInt16(hd))
+                u16 += (p * UInt16(hd))
             }
-            guard u16[sc] < 256 else {
-                //print("overflow '\(u16[sc])'", #line)
+            // Check that the ipv4 segment value is 0-255
+            guard u16 < 256 else {
+                // ipv4 segement overflow
                 return nil
             }
-        }
-        else {
-            return nil
-        }
-    }
-    if str.isEmpty == false {
-        let li = iii.index(before: iii.endIndex)
-        if (48...57).contains(str[li].asciiValue ?? 0) ||
-            (97...102).contains(str[li].asciiValue ?? 0) ||
-            ((65...70).contains(str[li].asciiValue ?? 0) && relaxed) {
-            sc += 1
-        }
-    }
-
-    if /*let addressType = atype*/ (bm & maskAddressType) != maskAddressType {
-        if /*addressType*/(bm & maskAddressType) == 0 {
-            if sc == 4 {
-                let u8 = u16.prefix(4).map({ UInt8($0) })
-                //print("return: IPAddress(bytes: \(u8))")
-                return IPAddress(bytes: u8, cidr: Int(cidr ?? 32))
+            // Increment the consecutive separator counter
+            consecutiveSeparatorCount += 1
+            // Check if we have '..' (or more)
+            guard consecutiveSeparatorCount < 2 else {
+                // We have more than one consecutive colons, this is not allowed for ipv4 addresses
+                return nil
             }
-            else {
+            // Set address type
+            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v4.rawValue
+            // Reset the digit stack, keep capacity
+            digitStack.removeAll(keepingCapacity: true)
+            // append segment value
+            u16Stack.append(u16)
+        }
+        // Slash '/'
+        else if hd == 47 {
+            // Make sure (ipv4 or ipv6) address part ends with digit segment
+            // or with '::'
+            guard consecutiveSeparatorCount == 0 || consecutiveSeparatorCount == 2 else {
+                // Invalid address format, a well formed digit segment or '::' must precede cidr
+                return nil
+            }
+            // Convert the cidr value from String to UInt8
+            guard let c = UInt8(str[iii.index(after: i)...]) else {
+                // Invalid cidr format
+                return nil
+            }
+            // Set the cidr value
+            bm = (bm & ~maskCidr) | UInt16(c) << 8
+            // We're done here, break out and ignore the rest of the string
+            break
+        }
+        // Digits '0 - 9'
+        else if hd < 58 {
+            // Check if we have a single separator in front of the first digit segment
+            // ipv6 address :1234...
+            //              └┴─ must fail
+            // ipv6 address ::1234...
+            //              └─┴─ must succeed
+            // ipv6 address 1234:1234...
+            //                  └┴─ must succeed
+            // ipv4 address .168.5.4
+            //              └┴─ must fail
+            guard (i == iii.index(after: iii.startIndex) && consecutiveSeparatorCount == 1) == false else {
+                // Yes, single separator in front of digit(s), not allowed
+                return nil
+            }
+            if opts.contains(.noLeadingZeros) {
+                // Check if we have a leading zero
+                guard (bm & maskZeroBit) == 0 else {
+                    // Previous digit was zero and options has noLeadingZeros set, fail
+                    return nil
+                }
+                // Set zeroBit accordingly
+                bm = (hd == 48 && digitStack.count == 0) ? (bm | maskZeroBit) : (bm & ~maskZeroBit)
+            }
+            // append digit value
+            digitStack.append(hd - 48)
+            // reset consecutive separator count
+            consecutiveSeparatorCount = 0
+        }
+        // a-f
+        else if hd > 96 {
+            // :abcd must fail
+            if i == iii.index(after: iii.startIndex), consecutiveSeparatorCount == 1 {
+                return nil
+            }
+            if (bm & maskZeroBit) > 0 {
+                return nil
+            }
+            // append digit value
+            digitStack.append(hd - 87)
+            // set address type
+            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            // reset consecutive separator count
+            consecutiveSeparatorCount = 0
+        }
+        // A-F
+        else if opts.contains(.noUppercase) == false, (65...70).contains(hd) {
+            // :ABCD must fail
+            if i == iii.index(after: iii.startIndex), consecutiveSeparatorCount == 1 {
                 //print("invalid format", #line)
                 return nil
             }
+            if (bm & maskZeroBit) > 0 {
+                return nil
+            }
+            // append digit value
+            digitStack.append(hd - 55)
+            // set address type
+            bm = (bm & ~maskAddressType) | IPAddress.IPAddrType.v6.rawValue
+            // reset consecutive separator count
+            consecutiveSeparatorCount = 0
         }
-        else if /*addressType == 1*/(bm & maskAddressType) == 1 {
-            if sc == 8 {
-                //print("return: IPAddress(abcdefgh:)")
-                return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
-            }
-            else {
-                if insertionPoint == -1 {
-                    //print("invalid format", #line)
-                    return nil
-                }
-                else {
-                    let insert = Array(repeating: UInt16(0), count: 8 - sc)
-                    //print("xxx", sc, insert,insertionPoint)
-                    u16.insert(contentsOf: insert, at: insertionPoint)
-                    //print("u16:", u16)
-                    return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
-                }
-            }
+        else {
+            // invalid character
+            return nil
         }
     }
-    //print("failing parsing", #line)
+
+    // process remaining last segment
+    if (bm & maskAddressType) == IPAddress.IPAddrType.v6.rawValue {
+        // Check for digit and segment overflow
+        guard (digitStack.isEmpty == false || bm & maskInsertionPoint != maskInsertionPoint), digitStack.count < 5, u16Stack.count < 8 else {
+            return nil
+        }
+        // Set address segment values
+        var u16:UInt16 = 0
+        for hd in digitStack {
+            u16 = (u16 << 4) + UInt16(hd)
+        }
+        u16Stack.append(u16)
+    }
+    else if (bm & maskAddressType) == IPAddress.IPAddrType.v4.rawValue {
+        // Check for digit and segment overflow
+        guard digitStack.isEmpty == false, digitStack.count < 4, u16Stack.count < 4 else {
+            return nil
+        }
+        // Set address segment values
+        var u16:UInt16 = 0
+        for (i,hd) in digitStack.reversed().enumerated() {
+            var p:UInt16 = 1
+            for _ in 0..<i {
+                p = p * 10
+            }
+            u16 += (p * UInt16(hd))
+        }
+        // Check for ipv4 segment value overflow
+        guard u16 < 256 else {
+            return nil
+        }
+        u16Stack.append(u16)
+    }
+    else {
+        // unknown address type
+        return nil
+    }
+
+    // Check address segment counts and fill in the blanks if needed
+    if (bm & maskAddressType) == IPAddress.IPAddrType.v4.rawValue {
+        // Do we have all required 4 segments of an ipv4 address
+        guard u16Stack.count == 4 else {
+            return nil
+        }
+        // Map values to UInt8
+        let u8 = u16Stack.prefix(4).map({ UInt8($0) })
+        // Initialize ipv4 address
+        let cidr = (bm & maskCidr) == maskCidr ?
+        IPAddress.validV4CIDRRange.upperBound
+        :
+        Int((bm & maskCidr) >> 8)
+        return IPAddress(bytes: u8, cidr: cidr)
+    }
+    else if (bm & maskAddressType) == IPAddress.IPAddrType.v6.rawValue {
+        // Do we have all required 8 segments of an ipv4 address
+        let cidr = (bm & maskCidr) == maskCidr ?
+        IPAddress.validV6CIDRRange.upperBound
+        :
+        Int((bm & maskCidr) >> 8)
+        guard u16Stack.count == 8 else {
+            // Was there a wildcard '::'
+            guard (bm & maskInsertionPoint) != 0b1000_0000 else {
+                return nil // No wildcard '::' and we don't have enough segments
+            }
+            // Insertion elements
+            let insert = Array(repeating: UInt16(0), count: Swift.max(0, 8 - /*segmentIndex*/u16Stack.count))
+            // Insert
+            u16Stack.insert(contentsOf: insert, at: /*insertionPoint*/ Int((bm & maskInsertionPoint) >> 4))
+            // Initialize ipv6 address
+            return IPAddress(u16Stack[0], u16Stack[1], u16Stack[2], u16Stack[3], u16Stack[4], u16Stack[5], u16Stack[6], u16Stack[7], cidr: Int(cidr))
+        }
+        // Initialize ipv6 address
+        return IPAddress(u16Stack[0], u16Stack[1], u16Stack[2], u16Stack[3], u16Stack[4], u16Stack[5], u16Stack[6], u16Stack[7], cidr: Int(cidr))
+    }
     return nil
 }
