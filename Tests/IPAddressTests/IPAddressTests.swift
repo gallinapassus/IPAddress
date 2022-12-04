@@ -19,10 +19,10 @@ final class IPAddressTests: XCTestCase {
             // v4
             for (str, expected, _) in ipv4ParsingZoo {
                 //print("IPAddress.init(\"\(str)\") => ", terminator: "")
-                let initialized = IPAddress(str)
+                let initialized = IPAddress(string: str)
                 if expected == nil {
                     //print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
-                    XCTAssertNil(initialized)
+                    XCTAssertNil(initialized, "expected nil, got '\(initialized as Any)'")
                 }
                 else {
                     //print(initialized.debugDescription, initialized != nil ? "SUCCESS" : "FAILED")
@@ -34,10 +34,10 @@ final class IPAddressTests: XCTestCase {
             // v6
             for (str, expected, _) in ipv6ParsingZoo {
                 //print("IPAddress.init(\"\(str)\") => ", terminator: "")
-                let initialized = IPAddress(str)
+                let initialized = IPAddress(string: str)
                 if expected == nil {
                     //print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
-                    XCTAssertNil(initialized)
+                    XCTAssertNil(initialized, "expected nil from '\(str)', got '\(initialized as Any)'")
                 }
                 else {
                     //print(initialized.debugDescription, initialized != nil ? "SUCCESS" : "FAILED")
@@ -551,14 +551,12 @@ final class IPAddressTests: XCTestCase {
         }
     }
     func test_compactDescription() {
-
         for (str, _, expected) in ipv4ParsingZoo + ipv6ParsingZoo {
-            guard let _ = IPAddress(str) else {
-                XCTAssertNil(expected, "Expected init from '\(str)' to \(expected == nil ? "succeed" : "fail")")
+            guard let _ = IPAddress(string: str) else {
+                XCTAssertNil(expected, "Expected init from '\(str)' to \(expected != nil ? "succeed" : "fail")")
                 continue
             }
-            //print("init(\(str)) => expecting \(expected == nil ? "nil" : "\(expected!)") => got \(ip.compactDescription)\n")
-            XCTAssertEqual(IPAddress(str)?.compactDescription, expected)
+            XCTAssertEqual(IPAddress(string: str)?.compactDescription, expected)
         }
     }
     func test_iterator() {
@@ -774,6 +772,284 @@ final class IPAddressTests: XCTestCase {
             XCTAssertNil(c.advanced(by: -1,clamped: true))
         }
     }
+    func test_string_parsing_options() {
+        XCTAssertEqual(IPAddress(string: "ABCD::")?.compactDescription, "abcd::")
+        XCTAssertEqual(IPAddress(string: "ABCD::", options: .noUppercase)?.compactDescription, nil)
+    }
+    /*
+    func test_parser() {
+        
+        func parse(_ str:String, isLittleEndian:Bool) -> IPAddress? {
+            //print(str)
+            let iii = str.indices
+            var headDigitStack:[UInt8] = []
+            var wildcard:DefaultIndices<String>.Element? = nil
+            var u16:[UInt16] = Array(repeating: 0, count: 8)
+            //print(isLittleEndian ? "LittleEndian":"BigEndian")
+            var digitCount:Int = 0
+            var ccc:Int = 0 // consecutive colon count
+            var sc:Int = 0 // segment count
+            var addressType:UInt16? = nil // v4
+            var outi:DefaultIndices<String>.Element = iii.endIndex
+            var insertionPoint:Int = 0
+            var zeroBit:Bool = false
+            let relaxed:Bool = true
+            var cidr:UInt8? = nil
+            //
+            // headscan
+            //
+            for i in iii {
+//                print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '\(str[i])'    /\(cidr)    \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "??" : addressType! == 0 ? "v4":"v6")    \(headDigitStack)")
+                if let hd = str[i].asciiValue, hd > 45, hd < 103 {
+                    // :
+                    if hd == 58 {
+                        zeroBit = false
+                        if addressType == nil {
+                            addressType = 1 // v6
+                        }
+                        guard headDigitStack.count < 5 else {
+                            print("invalid format, too many digits", #line)
+                            return nil
+                        }
+                        for hd in headDigitStack {
+                            u16[sc] = (u16[sc] << 4) + UInt16(hd)
+                        }
+                        headDigitStack = []
+                        digitCount = 0
+                        ccc += 1
+                        if ccc == 2 {
+                            if outi != str.indices.endIndex {
+                                print("multiple ::", #line)
+                                return nil
+                            }
+                            wildcard = i
+                            outi = i
+                            insertionPoint = sc
+                            print("wildcard found, not breaking out", #line)
+                            //break
+                        }
+                        else if ccc > 2 {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        if i == iii.index(before: str.endIndex), ccc != 2 {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                    }
+                    // .
+                    else if hd == 46 {
+                        zeroBit = false
+                        if addressType == nil {
+                            addressType = 0 // v4
+                        }
+                        guard headDigitStack.count < 4 else {
+                            print("invalid format, too many digits", #line)
+                            return nil
+                        }
+                        for (i,hd) in headDigitStack.reversed().enumerated() {
+                            var p:UInt16 = 1
+                            for _ in 0..<i {
+                                p = p * 10
+                            }
+                            u16[sc] += (p * UInt16(hd))
+                        }
+                        guard u16[sc] < 256 else {
+                            print("overflow '\(u16[sc])'", #line)
+                            return nil
+                        }
+                        digitCount = 0
+                        ccc += 1
+                        if ccc == 2 {
+                            if outi != str.indices.endIndex {
+                                print("multiple ..", #line)
+                                return nil
+                            }
+                            wildcard = i
+                            outi = i
+                            insertionPoint = sc
+                            print("breaking out", #line)
+                            break
+                        }
+                        headDigitStack = []
+                    }
+                    // /
+                    else if hd == 47 {
+                        guard ccc == 0 || ccc == 2 else {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        guard let c = UInt8(str[iii.index(after: i)...]) else {
+                            print("invalid cidr '\(str[iii.index(after: i)...])'")
+                            return nil
+                        }
+                        cidr = c
+                        print("cidr", UInt8(str[iii.index(after: i)...]) as Any)
+                        zeroBit = false
+                        digitCount = 0
+                        //headSegmentCount += 1
+                        break // return IPAddress(str)
+                    }
+                    // 0 - 9
+                    else if hd < 58 {
+                        // :1234 must fail
+                        if i == iii.index(after: iii.startIndex), ccc == 1 {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        if zeroBit {
+                            print("invalid leading zero", #line)
+                            return nil
+                        }
+                        zeroBit = hd == 48 && digitCount == 0
+                        headDigitStack.append(hd - 48)
+                        digitCount += 1
+                        ccc = 0
+                    }
+                    // a-f
+                    else if hd > 96 {
+                        // :abcd must fail
+                        if i == iii.index(after: iii.startIndex), ccc == 1 {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        if zeroBit {
+                            print("invalid leading zero", #line)
+                            return nil
+                        }
+                        headDigitStack.append(hd - 87)
+                        digitCount += 1
+                        addressType = 1
+                        ccc = 0
+                    }
+                    else if relaxed, (65...70).contains(hd) {
+                        // :ABCD must fail
+                        if i == iii.index(after: iii.startIndex), ccc == 1 {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        if zeroBit {
+                            print("invalid leading zero", #line)
+                            return nil
+                        }
+                        
+                        headDigitStack.append(hd - 55)
+                        digitCount += 1
+                        addressType = 1
+                        ccc = 0
+                    }
+                    else {
+                        print("invalid char '\(str[i])'", #line)
+                        return nil
+                    }
+                    if addressType == nil {
+                        if hd > 96 {
+                            // addresstype had not yet been resolved and we've got a|b|c|d|e|f
+                            // from now on, let's assume this is a v6 address
+                            print("looks like an v6 address")
+                            addressType = 1
+                        } // else ... we don't know yet
+                    }
+                    if digitCount == 0, i != iii.first {
+                        sc += 1
+                        if addressType == 1, sc > 7 {
+                            print("too many segments", #line)
+                            return nil
+                        }
+                        else if addressType == 0, sc > 3 {
+                            print("too many segments", #line)
+                            return nil
+                        }
+                    }
+                }
+                else {
+                    print("invalid char '\(str[i])'", #line)
+                    return nil
+                }
+                print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '\(str[i])'    /\(cidr as Any)    \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "??" : addressType! == 0 ? "v4":"v6")    \(u16)    \(headDigitStack)")
+            }
+            // process remaining last segment
+            if let addressType = addressType {
+                if addressType == 1 {
+                    for hd in headDigitStack {
+                        u16[sc] = (u16[sc] << 4) + UInt16(hd)
+                    }
+                }
+                else if addressType == 0 {
+                    for (i,hd) in headDigitStack.reversed().enumerated() {
+                        var p:UInt16 = 1
+                        for _ in 0..<i {
+                            p = p * 10
+                        }
+                        u16[sc] += (p * UInt16(hd))
+                    }
+                    guard u16[sc] < 256 else {
+                        print("overflow '\(u16[sc])'", #line)
+                        return nil
+                    }
+                }
+                else {
+                    
+                }
+            }
+            if str.isEmpty == false {
+                let li = iii.index(before: iii.endIndex)
+                if (48...57).contains(str[li].asciiValue ?? 0) ||
+                    (97...102).contains(str[li].asciiValue ?? 0) ||
+                    ((65...70).contains(str[li].asciiValue ?? 0) && relaxed) {
+                    sc += 1
+                }
+            }
+            print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '#'        \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "unknown" : addressType! == 0 ? "v4":"v6")    \(u16)")
+
+            if let addressType = addressType {
+                if addressType == 0 {
+                    if sc == 4 {
+                        let u8 = u16.prefix(4).map({ UInt8($0) })
+                        print("return: IPAddress(bytes: \(u8))")
+                        return IPAddress(bytes: u8, cidr: Int(cidr ?? 32))
+                    }
+                    else {
+                        print("invalid format", #line)
+                        return nil
+                    }
+                }
+                else if addressType == 1 {
+                    if sc == 8 {
+                        print("return: IPAddress(abcdefgh:)")
+                        return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
+                    }
+                    else {
+                        if outi == str.indices.endIndex {
+                            print("invalid format", #line)
+                            return nil
+                        }
+                        else {
+                            let insert = Array(repeating: UInt16(0), count: 8 - sc)
+                            print("xxx", sc, insert,insertionPoint)
+                            u16.insert(contentsOf: insert, at: insertionPoint)
+                            print("u16:", u16)
+                            return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
+                        }
+                    }
+                }
+            }
+            print("failing parsing", #line)
+            return nil // IPAddress(str)
+        }
+        do {
+//            for (str, expected, _) in [("a:F::1", IPAddress("::1"), "")] {
+//            for (str, expected, _) in ipv4ParsingZoo {
+            for (str, expected, _) in ipv4ParsingZoo + ipv6ParsingZoo {
+                print("IPAddress.init(\"\(str)\")")
+                let le = parse(str, isLittleEndian: true)
+                XCTAssertEqual(le, expected)
+                print("\t", le as Any, "\n")
+//                let be = parse(str, isLittleEndian: false)
+//                print(be as Any)
+            }
+        }
+    }*/
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
        the Int's capabilities.
@@ -950,7 +1226,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".init?(bytes:cidr:)", "ipv4", "Randomized addresses",
+        return (".init?(bytes:cidr:)", "ipv4", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     func perf_ipv6_init_from_bytes(iterations:Int) -> (String, String, String, Double, UInt64) {
@@ -970,7 +1246,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".init?(bytes:cidr:)", "ipv6", "Randomized addresses",
+        return (".init?(bytes:cidr:)", "ipv6", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     func perf_ipv4_init_from_data(iterations:Int) -> (String, String, String, Double, UInt64) {
@@ -991,7 +1267,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".init?(data:cidr:)", "ipv4", "Randomized addresses",
+        return (".init?(data:cidr:)", "ipv4", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     func perf_ipv6_init_from_data(iterations:Int) -> (String, String, String, Double, UInt64) {
@@ -1012,7 +1288,7 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".init?(data:cidr:)", "ipv6", "Randomized addresses",
+        return (".init?(data:cidr:)", "ipv6", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     func perf_init_from_string(iterations:Int) -> (String, String, String, Double, UInt64) {
@@ -1039,7 +1315,63 @@ final class PerformanceTests : XCTestCase {
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
+        return (".init?(_:)", "ipv4 & ipv6", "Mix of strings resulting failure / success",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_init_from_alt_string(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var a:[String] = []
+        var i:UInt16 = 0
+        while i < UInt16.max {
+            for (str, _, _) in (ipv4ParsingZoo + ipv6ParsingZoo) {
+                guard i < UInt16.max else { break }
+                a.append(str)
+                i += 1
+            }
+        }
+        var tarr:[Double] = []
+        let count = UInt64(a.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for str in a {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(string: str)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
         return (".init?(string:)", "ipv4 & ipv6", "Mix of strings resulting failure / success",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_init_from_alt_string_valid_random(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var a:[String] = []
+        var zoo:[String] = []
+        for _ in 0..<UInt16.max {
+            var random:[String] = []
+            for _ in 0..<8 {
+                let randomU16 = (UInt16(0)...UInt16.max).randomElement()!
+                random.append(String(randomU16, radix: 16))
+            }
+            zoo.append(random.joined(separator: ":") + "/" + "\(IPAddress.validV6CIDRRange.randomElement()!)")
+        }
+        a = zoo
+        var tarr:[Double] = []
+        let count = UInt64(zoo.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for str in a {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(string: str)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".init?(string:)", "ipv6", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     // MARK: -
@@ -1359,6 +1691,8 @@ final class PerformanceTests : XCTestCase {
         averages.append(runit(perf_ipv4_init_from_data(iterations:)))
         averages.append(runit(perf_ipv6_init_from_data(iterations:)))
         averages.append(runit(perf_init_from_string(iterations:)))
+        averages.append(runit(perf_init_from_alt_string(iterations:)))
+        averages.append(runit(perf_init_from_alt_string_valid_random(iterations:)))
 
         averages.append(runit(perf_ipv4_contains(iterations:)))
         averages.append(runit(perf_ipv6_contains(iterations:)))
@@ -1441,14 +1775,23 @@ let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [
     ("a", nil, nil), // not v4 nor v6
     ("192.-168.5.4/18", nil, nil), // invalid element
     ("192.168.5.256/18", nil, nil), // invalid element
+    ("1920.168.5.256/18", nil, nil), // too many digits
+    ("192.168.5.", nil, nil), // missing segment
+    ("192.168.5.4.", nil, nil), // too many segments
+    ("192.168.5.4.3", nil, nil), // too many segments
 ]
 let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
+    ("0:0:0:0:0:0:0:1234", IPAddress(0, 0, 0, 0, 0, 0, 0, 4660, cidr: 128), "::1234"),
+    ("1234:0:0:0:0:0:0:0", IPAddress(4660, 0, 0, 0, 0, 0, 0, 0, cidr: 128), "1234::"),
+    ("12345:0:0:0:0:0:0:0", nil, nil), // too many digits, overflow
     ("1:2:3:4:5:6:7:8/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 18), "1:2:3:4:5:6:7:8"),
     ("1:2:3:4:5:6:7:dead/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 57005, cidr: 18), "1:2:3:4:5:6:7:dead"),
     ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128), "::1"),
+    // ("::1/129", nil, nil), // invalid cidr => precondition crash
+    //("::A/128", nil, nil), // relaxed = true => ok, relaxed = false => should fails because of uppercase
     ("1::", IPAddress(1, 0, 0, 0, 0, 0, 0, 0), "1::"),
     ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64), "dead::beef:1"),
-    ("ffff:/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
+    ("ffff:/64", nil, nil), // invalid format, should have "::" at the end
     ("ffff::/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0, cidr: 64), "ffff::"),
     ("ffff::ff/64", IPAddress(65535, 0, 0, 0, 0, 0, 0, 255, cidr: 64), "ffff::ff"),
     ("f0f0::f1f1", IPAddress(0xf0f0, 0, 0, 0, 0, 0, 0, 0xf1f1), "f0f0::f1f1"),
@@ -1473,23 +1816,23 @@ let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
     ("::n:a:n:n:n:", nil, nil), // non-hex
     ("ffff:ffff:ffff0:ffff:ffff:", nil, nil), // overflow element
     ("ffff", nil, nil), // This should fail as we dont know if the intention is ::ffff or ffff::
-    ("ffff:", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"), // intention is present
+    ("ffff:", nil, nil), // invalid format, should have "::" at the end
     ("ffff:n", nil, nil), // This should fail because of n
     ("ffff::", IPAddress(65535, 0, 0, 0, 0, 0, 0, 0), "ffff::"),
     ("ffff:::", nil, nil), // :::
-    (":ffff", IPAddress(0, 0, 0, 0, 0, 0, 0, 65535), "::ffff"), // intention is present
+    (":ffff", nil, nil), // invalid format, should have "::" at the start
     ("::fffe", IPAddress(0, 0, 0, 0, 0, 0, 0, 65534), "::fffe"),
     (":::ffff", nil, nil), // :::
-    (":2:3:4:5:6:7:", IPAddress(0, 2, 3, 4, 5, 6, 7, 0), "::2:3:4:5:6:7:0"), // intention is present
+    (":2:3:4:5:6:7:", nil, nil), // invalid format, "::" must be used to denote one or more "0" elements
     (":2::4:5:6:7:", nil, nil), // :: should be first, not in the middle
     ("ff0:f00::aaaa:bbbb", IPAddress(0xff0, 0xf00, 0, 0, 0, 0, 0xaaaa, 0xbbbb), "ff0:f00::aaaa:bbbb"),
     ("0:1:2:3:4:5:6:7:8", nil, nil), // Too many elements
     (":1:2:3:4:5:6:7:8", nil, nil), // Too many elements
     ("1:2:3:4:5:6:7:8:9", nil, nil), // Too many elements
     ("1:2:3:4:5:6:7:8:", nil, nil), // Too many elements
-    ("2002:0db8::0001:0000", IPAddress(8194, 3512, 0, 0, 0, 0, 1, 0), "2002:db8::1:0"),
-    ("2001:db8::1:0:0:1/19", IPAddress(8193, 3512, 0, 0, 1, 0, 0, 1, cidr: 19), "2001:db8::1:0:0:1"),
-    ("2001:db8:0000:1:1:1:1:1", IPAddress(8193, 3512, 0, 1, 1, 1, 1, 1), "2001:db8::1:1:1:1:1"),
+    ("2002:0db8::0001:0000", IPAddress(0x2002, 0xdb8, 0, 0, 0, 0, 1, 0), "2002:db8::1:0"), // depends on parsing options (has leading zeros)
+    ("2001:db8::1:0:0:1/19", IPAddress(0x2001, 0xdb8, 0, 0, 1, 0, 0, 1, cidr: 19), "2001:db8::1:0:0:1"),
+    ("2001:db8:0000:1:1:1:1:1", IPAddress(0x2001, 0xdb8, 0, 1, 1, 1, 1, 1), "2001:db8::1:1:1:1:1"), // depends on parsing options (has leading zeros)
     ("a::b", IPAddress(10, 0, 0, 0, 0, 0, 0, 11), "a::b"),
     ("a::c::b", nil, nil), // 2 x :: not allowed
     ("0:1:A:B:C:D:E:F", IPAddress(0, 1, 10, 11, 12, 13, 14, 15), "::1:a:b:c:d:e:f"), // uppercase

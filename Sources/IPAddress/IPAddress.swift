@@ -5,8 +5,34 @@ import Parsing
 public struct IPAddress : Codable {
 
     /// Ip address type enumeration
-    public enum IPAddrType : UInt8, Codable { case v4 = 0, v6 = 1 }
+    public enum IPAddrType : UInt16, Codable { case v4 = 0, v6 = 1 }
 
+    /// Parsing options
+    public struct ParsingOptions : OptionSet {
+        public let rawValue: Int
+        public init(rawValue:Int) {
+            self.rawValue = rawValue
+        }
+        public static let noLeadingZeros   = ParsingOptions(rawValue: 1 << Opts.noLeadingZeros.rawValue)
+        public static let noZeroSupression = ParsingOptions(rawValue: 1 << Opts.noZeroSupression.rawValue)
+        public static let noUppercase      = ParsingOptions(rawValue: 1 << Opts.noUppercase.rawValue)
+        public static let ipv4Only         = ParsingOptions(rawValue: 1 << Opts.ipv4Only.rawValue)
+        public static let ipv6Only         = ParsingOptions(rawValue: 1 << Opts.ipv6Only.rawValue)
+
+        enum Opts : Int, CaseIterable {
+            case noLeadingZeros
+            case noZeroSupression
+            case noUppercase
+            case ipv4Only
+            case ipv6Only
+        }
+        public static var allCases: [IPAddress.ParsingOptions] = Opts.allCases
+            .filter({ $0.rawValue < (MemoryLayout<Int>.size * 8)})
+            .map { ParsingOptions(rawValue: 1 << $0.rawValue) }
+        public static func < (lhs: IPAddress.ParsingOptions, rhs: IPAddress.ParsingOptions) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+    }
     /// Data storage for storing ipv6 address type and address bytes
     internal let ipv6rhs:UInt64
     internal let ipv6lhs:UInt64
@@ -194,6 +220,12 @@ public struct IPAddress : Codable {
             }
             self = validV4 // was v4
         }
+    }
+    public init?(string:String, options:ParsingOptions? = nil) {
+        guard let validAddress = alt_parser(string, options: options) else {
+            return nil
+        }
+        self = validAddress
     }
 }
 // MARK: -
