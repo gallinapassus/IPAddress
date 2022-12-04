@@ -263,7 +263,7 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
     let maskInsertionPoint:UInt16 = 0b0000_0000_1111_0000
     let maskCidr:UInt16 =           0b1111_1111_0000_0000
     
-    var bm:UInt16 = 0b0000_0000_1000_0000 | maskCidr
+    var bm:UInt16 = maskInsertionPoint | maskCidr
     if opts.contains(.ipv4Only) {
         bm |= IPAddress.IPAddrType.v4.rawValue
     }
@@ -311,7 +311,7 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
             // Check if we have '::'
             if consecutiveSeparatorCount == 2 {
                 // Have we already seen '::' before?
-                guard (bm & maskInsertionPoint) == 0b1000_0000 else {
+                guard (bm & maskInsertionPoint) == maskInsertionPoint else {
                     return nil // Yes, this is now a subsequent '::', only one '::' is allowed
                 }
                 if opts.contains(.noZeroSupression) {
@@ -532,7 +532,7 @@ internal func alt_parser(_ str:String, options:IPAddress.ParsingOptions? = nil) 
         Int((bm & maskCidr) >> 8)
         guard u16Stack.count == 8 else {
             // Was there a wildcard '::'
-            guard (bm & maskInsertionPoint) != 0b1000_0000 else {
+            guard (bm & maskInsertionPoint) != maskInsertionPoint else {
                 return nil // No wildcard '::' and we don't have enough segments
             }
             // Insertion elements
