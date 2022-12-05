@@ -193,36 +193,8 @@ public struct IPAddress : Codable {
     /// Initializes an ipv4 or ipv6 address
     ///
     /// Initializes an ipv4 or ipv6 address from given String.
-    public init?(_ string:String) {
-        if string.contains(":") { // Just a small optimization
-            // IPv6 first
-            let parsedV6 = try? Parse { IPv6AddressParser<String>() }.parse(string)
-            guard let validV6 = parsedV6 else {
-                let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
-                guard let validV4 = parsedV4 else {
-                    return nil // was not v4 nor v6
-                }
-                self = validV4 // was v4
-                return
-            }
-            self = validV6 // was v6
-        }
-        else {
-            // IPv4 first
-            let parsedV4 = try? Parse { IPv4AddressParser<String>() }.parse(string)
-            guard let validV4 = parsedV4 else {
-                let parsedV6 = try? Parse { IPv6AddressParser<String>() }.parse(string)
-                guard let validV6 = parsedV6 else {
-                    return nil // was not v4 nor v6
-                }
-                self = validV6 // was v6
-                return
-            }
-            self = validV4 // was v4
-        }
-    }
-    public init?(string:String, options:ParsingOptions? = nil) {
-        guard let validAddress = alt_parser(string, options: options) else {
+    public init?(_ string:String, options:ParsingOptions = ParsingOptions()) {
+        guard let validAddress = parser(string, options: options) else {
             return nil
         }
         self = validAddress

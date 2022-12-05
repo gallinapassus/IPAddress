@@ -11,15 +11,11 @@ let pkg = Package(
             targets: ["IPAddress"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-parsing.git",
-                 revision: "0.10.0"),
         .package(url: "https://github.com/gallinapassus/Table.git",
                  from: "0.1.0"),
     ],
     targets: [
-        .target(
-            name: "IPAddress",
-            dependencies: [.product(name: "Parsing", package: "swift-parsing")]),
+        .target(name: "IPAddress"),
         .testTarget(
             name: "IPAddressTests",
             dependencies: ["IPAddress", "Table"]),
