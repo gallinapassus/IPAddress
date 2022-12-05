@@ -19,7 +19,7 @@ final class IPAddressTests: XCTestCase {
             // v4
             for (str, expected, _) in ipv4ParsingZoo {
                 //print("IPAddress.init(\"\(str)\") => ", terminator: "")
-                let initialized = IPAddress(string: str)
+                let initialized = IPAddress(str)
                 if expected == nil {
                     //print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
                     XCTAssertNil(initialized, "expected nil, got '\(initialized as Any)'")
@@ -34,7 +34,7 @@ final class IPAddressTests: XCTestCase {
             // v6
             for (str, expected, _) in ipv6ParsingZoo {
                 //print("IPAddress.init(\"\(str)\") => ", terminator: "")
-                let initialized = IPAddress(string: str)
+                let initialized = IPAddress(str)
                 if expected == nil {
                     //print(initialized as Any, initialized == nil ? "SUCCESS" : "FAILED")
                     XCTAssertNil(initialized, "expected nil from '\(str)', got '\(initialized as Any)'")
@@ -552,11 +552,11 @@ final class IPAddressTests: XCTestCase {
     }
     func test_compactDescription() {
         for (str, _, expected) in ipv4ParsingZoo + ipv6ParsingZoo {
-            guard let _ = IPAddress(string: str) else {
+            guard let _ = IPAddress(str) else {
                 XCTAssertNil(expected, "Expected init from '\(str)' to \(expected != nil ? "succeed" : "fail")")
                 continue
             }
-            XCTAssertEqual(IPAddress(string: str)?.compactDescription, expected)
+            XCTAssertEqual(IPAddress(str)?.compactDescription, expected)
         }
     }
     func test_iterator() {
@@ -773,23 +773,23 @@ final class IPAddressTests: XCTestCase {
         }
     }
     func test_string_parsing_options() {
-        XCTAssertEqual(IPAddress(string: "ABCD::")?.compactDescription, "abcd::") // default is to accept uppercase
-        XCTAssertEqual(IPAddress(string: "ABCD::", options: .ipv6Only)?.compactDescription, "abcd::") // ok
-        XCTAssertEqual(IPAddress(string: "192.168.5.4", options: .ipv4Only)?.compactDescription, "192.168.5.4") // ok
+        XCTAssertEqual(IPAddress("ABCD::")?.compactDescription, "abcd::") // default is to accept uppercase
+        XCTAssertEqual(IPAddress("ABCD::", options: .ipv6Only)?.compactDescription, "abcd::") // ok
+        XCTAssertEqual(IPAddress("192.168.5.4", options: .ipv4Only)?.compactDescription, "192.168.5.4") // ok
 
-        XCTAssertNil(IPAddress(string: "ABCD::", options: .ipv4Only))
-        XCTAssertNil(IPAddress(string: "ABCD::", options: .noUppercase))
-        XCTAssertNil(IPAddress(string: "ABCD::", options: [.ipv6Only, .noUppercase]))
-        XCTAssertNil(IPAddress(string: "192.168.5.4", options: .ipv6Only))
-        XCTAssertNil(IPAddress(string: "ABCD::", options: .ipv4Only))
+        XCTAssertNil(IPAddress("ABCD::", options: .ipv4Only))
+        XCTAssertNil(IPAddress("ABCD::", options: .noUppercase))
+        XCTAssertNil(IPAddress("ABCD::", options: [.ipv6Only, .noUppercase]))
+        XCTAssertNil(IPAddress("192.168.5.4", options: .ipv6Only))
+        XCTAssertNil(IPAddress("ABCD::", options: .ipv4Only))
         
-        XCTAssertEqual(IPAddress(string: "0123::")?.compactDescription, "123::") // default is to accept leading zeros
-        XCTAssertNil(IPAddress(string: "0123::", options: .noLeadingZeros))
-        XCTAssertEqual(IPAddress(string: "010.1.1.1")?.compactDescription, "10.1.1.1") // default is to accept leading zeros
+        XCTAssertEqual(IPAddress("0123::")?.compactDescription, "123::") // default is to accept leading zeros
+        XCTAssertNil(IPAddress("0123::", options: .noLeadingZeros))
+        XCTAssertEqual(IPAddress("010.1.1.1")?.compactDescription, "10.1.1.1") // default is to accept leading zeros
 
-        XCTAssertNil(IPAddress(string: "abcd::", options: .noZeroSupression))
-        XCTAssertNil(IPAddress(string: "::abcd", options: .noZeroSupression))
-        XCTAssertNil(IPAddress(string: "beef::abcd", options: .noZeroSupression))
+        XCTAssertNil(IPAddress("abcd::", options: .noZeroSupression))
+        XCTAssertNil(IPAddress("::abcd", options: .noZeroSupression))
+        XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSupression))
     }
     /*
     func test_parser() {
@@ -1333,33 +1333,6 @@ final class PerformanceTests : XCTestCase {
         return (".init?(_:)", "ipv4 & ipv6", "Mix of strings resulting failure / success",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
-    func perf_init_from_alt_string(iterations:Int) -> (String, String, String, Double, UInt64) {
-        print(#function)
-        var a:[String] = []
-        var i:UInt16 = 0
-        while i < UInt16.max {
-            for (str, _, _) in (ipv4ParsingZoo + ipv6ParsingZoo) {
-                guard i < UInt16.max else { break }
-                a.append(str)
-                i += 1
-            }
-        }
-        var tarr:[Double] = []
-        let count = UInt64(a.count)
-        for i in 1...iterations {
-            var t:UInt64 = 0
-            for str in a {
-                let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(string: str)
-                let t1 = DispatchTime.now().uptimeNanoseconds
-                t += (t1 - t0)
-            }
-            tarr.append(Double(t))
-            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
-        }
-        return (".init?(string:)", "ipv4 & ipv6", "Mix of strings resulting failure / success",
-                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
-    }
     func perf_init_from_alt_string_valid_random(iterations:Int) -> (String, String, String, Double, UInt64) {
         print(#function)
         var a:[String] = []
@@ -1379,14 +1352,40 @@ final class PerformanceTests : XCTestCase {
             var t:UInt64 = 0
             for str in a {
                 let t0 = DispatchTime.now().uptimeNanoseconds
-                let _ = IPAddress(string: str)
+                let _ = IPAddress(str)
                 let t1 = DispatchTime.now().uptimeNanoseconds
                 t += (t1 - t0)
             }
             tarr.append(Double(t))
             print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
         }
-        return (".init?(string:)", "ipv6", "Randomized valid addresses",
+        return (".init?(_:)", "ipv6", "Randomized valid addresses",
+                tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
+    }
+    func perf_init_from_alt_string_valid_random_ipv4(iterations:Int) -> (String, String, String, Double, UInt64) {
+        print(#function)
+        var a:[String] = []
+        var zoo:[String] = []
+        for _ in 0..<UInt16.max {
+            zoo.append(IPAddress((0...255).randomElement()!, (0...255).randomElement()!,
+                                 (0...255).randomElement()!, (0...255).randomElement()!,
+                                 cidr: IPAddress.validV4CIDRRange.randomElement()!).description)
+        }
+        a = zoo
+        var tarr:[Double] = []
+        let count = UInt64(zoo.count)
+        for i in 1...iterations {
+            var t:UInt64 = 0
+            for str in a {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let _ = IPAddress(str)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                t += (t1 - t0)
+            }
+            tarr.append(Double(t))
+            print("    \(i): \(count) invocations in \(self.µs(Double(t)))")
+        }
+        return (".init?(_:)", "ipv4", "Randomized valid addresses",
                 tarr.reduce(0.0, { $0 + $1 }) / Double(iterations), count)
     }
     // MARK: -
@@ -1706,8 +1705,8 @@ final class PerformanceTests : XCTestCase {
         averages.append(runit(perf_ipv4_init_from_data(iterations:)))
         averages.append(runit(perf_ipv6_init_from_data(iterations:)))
         averages.append(runit(perf_init_from_string(iterations:)))
-        averages.append(runit(perf_init_from_alt_string(iterations:)))
         averages.append(runit(perf_init_from_alt_string_valid_random(iterations:)))
+        averages.append(runit(perf_init_from_alt_string_valid_random_ipv4(iterations:)))
 
         averages.append(runit(perf_ipv4_contains(iterations:)))
         averages.append(runit(perf_ipv6_contains(iterations:)))
