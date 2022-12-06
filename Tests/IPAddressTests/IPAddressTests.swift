@@ -1674,17 +1674,19 @@ final class PerformanceTests : XCTestCase {
 #if os(Linux)
         elements.append("\(fmttr(Double(info.physicalMemory), " bytes of memory"))")
 #elseif os(macOS)
+        var combined:[String] = []
         var size = 0
         sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
         var machine = [CChar](repeating: 0,  count: size)
         sysctlbyname("machdep.cpu.brand_string", &machine, &size, nil, 0)
-        elements.append(String(cString: machine))
-        elements.append("\(info.processorCount) processors")
+        combined.append(String(cString: machine))
+        combined.append("\(info.processorCount) processors")
         var measurement = Measurement(value: Double(info.physicalMemory), unit: UnitInformationStorage.bytes)
         measurement.convert(to: UnitInformationStorage.gibibytes)
-        elements.append("\(measurement.description) of memory")
+        combined.append("\(measurement.description) of memory")
+        elements.append(combined.joined(separator: ", "))
 #endif
-        return elements.joined(separator: ", ")
+        return elements.joined(separator: "\n")
     }
     @discardableResult
     func runit(_ f: (Int)->(String, String, String, Double, UInt64)) -> (String, String, String, Double, UInt64) {
@@ -1736,7 +1738,7 @@ final class PerformanceTests : XCTestCase {
                           Txt(addrType, align: .bottomCenter),
                           Txt(comment, align: .topLeft)])
         }
-        let tbl = Tbl("Performance test summary for \(hwspec())",
+        let tbl = Tbl("Performance test summary for\n\(hwspec())",
                       columns: cols,
                       cells: cells,
                       frameStyle: .roundedPadded)
