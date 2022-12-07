@@ -1753,6 +1753,8 @@ final class PerformanceTests : XCTestCase {
         do {
             let readme =
             """
+            [![Tests](https://github.com/gallinapassus/IPAddress/actions/workflows/ipaddress-ci.yml/badge.svg)](https://github.com/gallinapassus/IPAddress/actions/workflows/ipaddress-ci.yml)
+            
             # IPAddress
             
             A concrete type capable of encapsulating both ipv4 and ipv6 addresses.
