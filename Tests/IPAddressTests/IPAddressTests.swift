@@ -188,6 +188,15 @@ final class IPAddressTests: XCTestCase {
                 let ip = IPAddress(0, 0, cidr: i)
                 XCTAssertEqual(ip.underestimatedHostCount, expected)
             }
+            
+            XCTAssertEqual(IPAddress("::1/0")!.underestimatedHostCount, Int.max)
+            XCTAssertEqual(IPAddress("::1/62")!.underestimatedHostCount, Int.max)
+            XCTAssertEqual(IPAddress("::1/63")!.underestimatedHostCount, Int.max)
+            XCTAssertEqual(IPAddress("::1/64")!.underestimatedHostCount, Int.max)
+            XCTAssertEqual(IPAddress("::1/65")!.underestimatedHostCount, Int.max)
+            XCTAssertEqual(IPAddress("::1/66")!.underestimatedHostCount, 4611686018427387904)
+            XCTAssertEqual(IPAddress("::1/67")!.underestimatedHostCount, 2305843009213693952)
+            XCTAssertEqual(IPAddress("::1/128")!.underestimatedHostCount, 1)
         }
     }
     func test_isLoopback() {
@@ -561,23 +570,24 @@ final class IPAddressTests: XCTestCase {
     }
     func test_iterator() {
         do { // v4
-            
-            var o1 = IPAddressIterator(address: IPAddress(255, 255, 255, 255, cidr: 31))
+
+            var o1 = IPAddressIterator(network: IPAddress(255, 255, 255, 255, cidr: 31))
             XCTAssertEqual(o1.next(), IPAddress(0xfffffffe, cidr: 31))
             XCTAssertEqual(o1.next(), IPAddress(0xffffffff, cidr: 31))
-            XCTAssertNil(o1.next()) // clamped == true
+            XCTAssertNil(o1.next())
 
-            var o2 = IPAddressIterator(address: IPAddress(0, 0, 255, 255, cidr: 31))
-            XCTAssertEqual(o2.next(), IPAddress(0x0000fffe, cidr: 31))
-            XCTAssertEqual(o2.next(), IPAddress(0x0000ffff, cidr: 31))
-            XCTAssertEqual(o2.next(), IPAddress(0x00010000, cidr: 31)) // clamped == false
+            var o2 = IPAddressIterator(range: IPAddress(0, 0, 255, 255, cidr: 32)...IPAddress(0, 1, 0, 0, cidr: 32))
+            XCTAssertEqual(o2.next(), IPAddress(0x0000ffff, cidr: 32))
+//            XCTAssertEqual(o2.next(), IPAddress(0x0000ffff, cidr: 32))
+            XCTAssertEqual(o2.next(), IPAddress(0x00010000, cidr: 32))
+            XCTAssertNil(o2.next())
 
-            var o3 = IPAddressIterator(address: IPAddress(0, 0, 255, 255, cidr: 31), clamped: true)
+            var o3 = IPAddressIterator(network: IPAddress(0, 0, 255, 255, cidr: 31))
             XCTAssertEqual(o3.next(), IPAddress(0x0000fffe, cidr: 31))
             XCTAssertEqual(o3.next(), IPAddress(0x0000ffff, cidr: 31))
             XCTAssertNil(o3.next()) // clamped == true
 
-            var o4 = IPAddressIterator(address: IPAddress(255, 255, 255, 255, cidr: 31), clamped: false)
+            var o4 = IPAddressIterator(network: IPAddress(255, 255, 255, 255, cidr: 31))
             XCTAssertEqual(o4.next(), IPAddress(0xfffffffe, cidr: 31))
             XCTAssertEqual(o4.next(), IPAddress(0xffffffff, cidr: 31))
             XCTAssertNil(o4.next()) // clamped == false, but we've reached v4 end
@@ -591,7 +601,7 @@ final class IPAddressTests: XCTestCase {
             ]
             let ip = IPAddress(192, 168, 13, 6, cidr: cidr)
 
-            var iter = IPAddressIterator(address: ip, clamped: true)
+            var iter = IPAddressIterator(network: ip)
             var index = 0
             while let i = iter.next() {
                 XCTAssertEqual(i, expected[index])
@@ -600,22 +610,23 @@ final class IPAddressTests: XCTestCase {
         }
         do { // v6
             
-            var o1 = IPAddressIterator(address: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127))
+            var o1 = IPAddressIterator(network: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127))
             XCTAssertEqual(o1.next(), IPAddress(0xffffffffffffffff, 0xfffffffffffffffe, cidr: 127)) // fe
             XCTAssertEqual(o1.next(), IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127)) // ff
             XCTAssertNil(o1.next()) // nil
 
-            var o2 = IPAddressIterator(address: IPAddress(0, 0xffffffffffffffff, cidr: 127))
+            var o2 = IPAddressIterator(range: IPAddress(0, 0xfffffffffffffffe, cidr: 127)...IPAddress(1, 0, cidr: 0))
             XCTAssertEqual(o2.next(), IPAddress(0, 0xfffffffffffffffe, cidr: 127)) // fe
             XCTAssertEqual(o2.next(), IPAddress(0, 0xffffffffffffffff, cidr: 127)) // ff
             XCTAssertEqual(o2.next(), IPAddress(0x1, 0x0, cidr: 127)) // clamped == false
+            XCTAssertNil(o2.next()) // clamped == false
 
-            var o3 = IPAddressIterator(address: IPAddress(0, 0xffffffffffffffff, cidr: 127), clamped: true)
+            var o3 = IPAddressIterator(network: IPAddress(0, 0xffffffffffffffff, cidr: 127))
             XCTAssertEqual(o3.next(), IPAddress(0, 0xfffffffffffffffe, cidr: 127)) // fe
             XCTAssertEqual(o3.next(), IPAddress(0, 0xffffffffffffffff, cidr: 127)) // ff
             XCTAssertNil(o3.next()) // clamped == true
 
-            var o4 = IPAddressIterator(address: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127), clamped: false)
+            var o4 = IPAddressIterator(network: IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127))
             XCTAssertEqual(o4.next(), IPAddress(0xffffffffffffffff, 0xfffffffffffffffe, cidr: 127)) // fe
             XCTAssertEqual(o4.next(), IPAddress(0xffffffffffffffff, 0xffffffffffffffff, cidr: 127)) // ff
             XCTAssertNil(o4.next()) // clamped == false, but we've reached v6 end
@@ -628,7 +639,7 @@ final class IPAddressTests: XCTestCase {
                 IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr),
             ]
             let ip = IPAddress(0xaaaa, 0xbb, 0xcc00, 0xd00d, 0xffff, 0, 0, 0xffff, cidr: cidr)
-            var iter = IPAddressIterator(address: ip, clamped: true)
+            var iter = IPAddressIterator(network: ip)
             var index = 0
             while let i = iter.next() {
                 XCTAssertEqual(i, expected[index])
@@ -636,7 +647,88 @@ final class IPAddressTests: XCTestCase {
             }
         }
     }
+    func test_strideable() {
+        do { // v4 distance(to:)
+            XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress(255, 255, 255, 255)), Int(UInt32.max))
+            XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress.ipv4localhost), 2130706432)
+        }
+        do { // v6 distance(to:)
+            // Below: both of the following will cause crash 
+            // let _ = IPAddress.ipv6localhost.distance(to: IPAddress.ipv6unspecifiedAddress)
+            // let _ = IPAddress.ipv4localhost.distance(to: IPAddress.ipv6unspecifiedAddress)
+        }
+        do { // v4 advanced(by:)
+            XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.advanced(by: Int(UInt32.max)), IPAddress(255, 255, 255, 255))
+            XCTAssertEqual(IPAddress.ipv4localhost.advanced(by: -Int(UInt32.max)), IPAddress.ipv4unspecifiedAddress)
+            XCTAssertEqual(IPAddress.ipv4localhost.advanced(by: -5), IPAddress(126, 255, 255, 251))
+        }
+        do { // v6 advanced(by:)
+            XCTAssertEqual(IPAddress.ipv6localhost.advanced(by: 1), IPAddress(0, 2, cidr: 128))
+            XCTAssertEqual(IPAddress.ipv6localhost.advanced(by: 0), IPAddress(0, 1, cidr: 128))
+            XCTAssertEqual(IPAddress.ipv6localhost.advanced(by: -1), IPAddress(0, 0, cidr: 128))
+            XCTAssertEqual(IPAddress(UInt64.max, UInt64.max).advanced(by: 1), IPAddress(UInt64.max, UInt64.max))
+        }
+    }
     func test_sequence() {
+        do { // v4
+            let expected:[Int] = IPAddress.validV4CIDRRange.reversed().map({ Int(1)<<$0 })
+            for (cidr,e) in zip(IPAddress.validV4CIDRRange,expected) {
+                let ip = IPAddress(192, 168, 13, 7, cidr: cidr)
+                let seq = IPAddressSequence(network: ip)
+                //print(seq.underestimatedCount, seq.startAddress.debugDescription, seq.endAddress.debugDescription, e)
+                XCTAssertEqual(seq.underestimatedCount, e)
+                var iterator = seq.makeIterator()
+                XCTAssertEqual(iterator.next(), ip.networkAddress)
+                
+                let seqr = IPAddressSequence(range: ip...IPAddress(192, 168, 14, 3, cidr: cidr))
+                print(seqr.underestimatedCount, seqr.startAddress.debugDescription, seqr.endAddress.debugDescription, e)
+                XCTAssertEqual(seqr.underestimatedCount, 253)
+                var iteratorr = seqr.makeIterator()
+                XCTAssertEqual(iteratorr.next(), IPAddress(ip, cidr: IPAddress.validV4CIDRRange.upperBound))
+            }
+        }
+        do {
+            let cidr = 32
+            let ip = IPAddress(255, 255, 254, 0, cidr: cidr)
+            let seq = IPAddressSequence(range: ip...IPAddress(255,255,255,255, cidr: cidr))
+            XCTAssertEqual(seq.underestimatedCount, 512)
+            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+        }
+        do {
+            let cidr = 128
+            let ip = IPAddress(0xffff_ffff_ffff_ffff, 0, cidr: cidr)
+            let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
+            XCTAssertEqual(seq.underestimatedCount, 9223372036854775807)
+            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+        }
+        do {
+            let cidr = 128
+            let ip = IPAddress(0xffff_ffff_ffff_ffff, 0x8000_0000_0000_0002, cidr: cidr)
+            let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
+            XCTAssertEqual(seq.underestimatedCount, 9223372036854775806)
+            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+        }
+        do {
+            let cidr = 128
+            let ip = IPAddress(0xffff_ffff_0000_0000, 0x8000_0000_0000_0001, cidr: cidr)
+            let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
+            XCTAssertEqual(seq.underestimatedCount, 9223372036854775807)
+            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+        }
+        do {
+            let expected = ["0.0.0.0/32", "0.0.0.1/32", "0.0.0.2/32", "0.0.0.3/32", "0.0.0.4/32"]
+            for (i,ip) in (IPAddress.ipv4unspecifiedAddress...IPAddress.ipv4unspecifiedAddress.advanced(by: 4)).enumerated() {
+                XCTAssertEqual(ip, IPAddress(expected[i]))
+            }
+        }
+        do {
+            let expected = ["2001:db8::100/128", "2001:db8::fe/128", "2001:db8::fc/128", "2001:db8::fa/128",
+                            "2001:db8::f8/128", "2001:db8::f6/128", "2001:db8::f4/128", "2001:db8::f2/128",
+                            "2001:db8::f0/128"]
+            for (i,ip) in (stride(from: IPAddress(0x20010db800000000, 0x100), through: IPAddress(0x20010db800000000, 0xf0), by: -2)).enumerated() {
+                XCTAssertEqual(ip, IPAddress(expected[i]))
+            }
+        }
         do { // v4
             let cidr = 30
             let expected = [
@@ -647,7 +739,7 @@ final class IPAddressTests: XCTestCase {
             ]
             let ip = IPAddress(192, 168, 13, 6, cidr: cidr)
 
-            let seq = IPAddressSequence(address: ip)
+            let seq = IPAddressSequence(network: ip)
             XCTAssertEqual(seq.underestimatedCount, 4)
             for (value,expected) in zip(seq,expected) {
                 XCTAssertEqual(value, expected)
@@ -662,7 +754,7 @@ final class IPAddressTests: XCTestCase {
                 IPAddress("::3/\(cidr)")!,
             ]
             let ip = IPAddress("::1/\(cidr)")!
-            let seq = IPAddressSequence(address: ip)
+            let seq = IPAddressSequence(network: ip)
             XCTAssertEqual(seq.underestimatedCount, 4)
             for (value,expected) in zip(seq,expected) {
                 //print(value.networkOrderedAddressBytes, expected.networkOrderedAddressBytes)
@@ -791,280 +883,22 @@ final class IPAddressTests: XCTestCase {
         XCTAssertNil(IPAddress("::abcd", options: .noZeroSupression))
         XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSupression))
     }
-    /*
-    func test_parser() {
-        
-        func parse(_ str:String, isLittleEndian:Bool) -> IPAddress? {
-            //print(str)
-            let iii = str.indices
-            var headDigitStack:[UInt8] = []
-            var wildcard:DefaultIndices<String>.Element? = nil
-            var u16:[UInt16] = Array(repeating: 0, count: 8)
-            //print(isLittleEndian ? "LittleEndian":"BigEndian")
-            var digitCount:Int = 0
-            var ccc:Int = 0 // consecutive colon count
-            var sc:Int = 0 // segment count
-            var addressType:UInt16? = nil // v4
-            var outi:DefaultIndices<String>.Element = iii.endIndex
-            var insertionPoint:Int = 0
-            var zeroBit:Bool = false
-            let relaxed:Bool = true
-            var cidr:UInt8? = nil
-            //
-            // headscan
-            //
-            for i in iii {
-//                print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '\(str[i])'    /\(cidr)    \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "??" : addressType! == 0 ? "v4":"v6")    \(headDigitStack)")
-                if let hd = str[i].asciiValue, hd > 45, hd < 103 {
-                    // :
-                    if hd == 58 {
-                        zeroBit = false
-                        if addressType == nil {
-                            addressType = 1 // v6
-                        }
-                        guard headDigitStack.count < 5 else {
-                            print("invalid format, too many digits", #line)
-                            return nil
-                        }
-                        for hd in headDigitStack {
-                            u16[sc] = (u16[sc] << 4) + UInt16(hd)
-                        }
-                        headDigitStack = []
-                        digitCount = 0
-                        ccc += 1
-                        if ccc == 2 {
-                            if outi != str.indices.endIndex {
-                                print("multiple ::", #line)
-                                return nil
-                            }
-                            wildcard = i
-                            outi = i
-                            insertionPoint = sc
-                            print("wildcard found, not breaking out", #line)
-                            //break
-                        }
-                        else if ccc > 2 {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        if i == iii.index(before: str.endIndex), ccc != 2 {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                    }
-                    // .
-                    else if hd == 46 {
-                        zeroBit = false
-                        if addressType == nil {
-                            addressType = 0 // v4
-                        }
-                        guard headDigitStack.count < 4 else {
-                            print("invalid format, too many digits", #line)
-                            return nil
-                        }
-                        for (i,hd) in headDigitStack.reversed().enumerated() {
-                            var p:UInt16 = 1
-                            for _ in 0..<i {
-                                p = p * 10
-                            }
-                            u16[sc] += (p * UInt16(hd))
-                        }
-                        guard u16[sc] < 256 else {
-                            print("overflow '\(u16[sc])'", #line)
-                            return nil
-                        }
-                        digitCount = 0
-                        ccc += 1
-                        if ccc == 2 {
-                            if outi != str.indices.endIndex {
-                                print("multiple ..", #line)
-                                return nil
-                            }
-                            wildcard = i
-                            outi = i
-                            insertionPoint = sc
-                            print("breaking out", #line)
-                            break
-                        }
-                        headDigitStack = []
-                    }
-                    // /
-                    else if hd == 47 {
-                        guard ccc == 0 || ccc == 2 else {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        guard let c = UInt8(str[iii.index(after: i)...]) else {
-                            print("invalid cidr '\(str[iii.index(after: i)...])'")
-                            return nil
-                        }
-                        cidr = c
-                        print("cidr", UInt8(str[iii.index(after: i)...]) as Any)
-                        zeroBit = false
-                        digitCount = 0
-                        //headSegmentCount += 1
-                        break // return IPAddress(str)
-                    }
-                    // 0 - 9
-                    else if hd < 58 {
-                        // :1234 must fail
-                        if i == iii.index(after: iii.startIndex), ccc == 1 {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        if zeroBit {
-                            print("invalid leading zero", #line)
-                            return nil
-                        }
-                        zeroBit = hd == 48 && digitCount == 0
-                        headDigitStack.append(hd - 48)
-                        digitCount += 1
-                        ccc = 0
-                    }
-                    // a-f
-                    else if hd > 96 {
-                        // :abcd must fail
-                        if i == iii.index(after: iii.startIndex), ccc == 1 {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        if zeroBit {
-                            print("invalid leading zero", #line)
-                            return nil
-                        }
-                        headDigitStack.append(hd - 87)
-                        digitCount += 1
-                        addressType = 1
-                        ccc = 0
-                    }
-                    else if relaxed, (65...70).contains(hd) {
-                        // :ABCD must fail
-                        if i == iii.index(after: iii.startIndex), ccc == 1 {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        if zeroBit {
-                            print("invalid leading zero", #line)
-                            return nil
-                        }
-                        
-                        headDigitStack.append(hd - 55)
-                        digitCount += 1
-                        addressType = 1
-                        ccc = 0
-                    }
-                    else {
-                        print("invalid char '\(str[i])'", #line)
-                        return nil
-                    }
-                    if addressType == nil {
-                        if hd > 96 {
-                            // addresstype had not yet been resolved and we've got a|b|c|d|e|f
-                            // from now on, let's assume this is a v6 address
-                            print("looks like an v6 address")
-                            addressType = 1
-                        } // else ... we don't know yet
-                    }
-                    if digitCount == 0, i != iii.first {
-                        sc += 1
-                        if addressType == 1, sc > 7 {
-                            print("too many segments", #line)
-                            return nil
-                        }
-                        else if addressType == 0, sc > 3 {
-                            print("too many segments", #line)
-                            return nil
-                        }
-                    }
-                }
-                else {
-                    print("invalid char '\(str[i])'", #line)
-                    return nil
-                }
-                print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '\(str[i])'    /\(cidr as Any)    \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "??" : addressType! == 0 ? "v4":"v6")    \(u16)    \(headDigitStack)")
-            }
-            // process remaining last segment
-            if let addressType = addressType {
-                if addressType == 1 {
-                    for hd in headDigitStack {
-                        u16[sc] = (u16[sc] << 4) + UInt16(hd)
-                    }
-                }
-                else if addressType == 0 {
-                    for (i,hd) in headDigitStack.reversed().enumerated() {
-                        var p:UInt16 = 1
-                        for _ in 0..<i {
-                            p = p * 10
-                        }
-                        u16[sc] += (p * UInt16(hd))
-                    }
-                    guard u16[sc] < 256 else {
-                        print("overflow '\(u16[sc])'", #line)
-                        return nil
-                    }
-                }
-                else {
-                    
-                }
-            }
-            if str.isEmpty == false {
-                let li = iii.index(before: iii.endIndex)
-                if (48...57).contains(str[li].asciiValue ?? 0) ||
-                    (97...102).contains(str[li].asciiValue ?? 0) ||
-                    ((65...70).contains(str[li].asciiValue ?? 0) && relaxed) {
-                    sc += 1
-                }
-            }
-            print("parsing head[dc=\(digitCount),zb=\(zeroBit),ccc=\(ccc)]:    '#'        \(sc)    \(wildcard == nil ? "_":"*")    \(addressType == nil ? "unknown" : addressType! == 0 ? "v4":"v6")    \(u16)")
-
-            if let addressType = addressType {
-                if addressType == 0 {
-                    if sc == 4 {
-                        let u8 = u16.prefix(4).map({ UInt8($0) })
-                        print("return: IPAddress(bytes: \(u8))")
-                        return IPAddress(bytes: u8, cidr: Int(cidr ?? 32))
-                    }
-                    else {
-                        print("invalid format", #line)
-                        return nil
-                    }
-                }
-                else if addressType == 1 {
-                    if sc == 8 {
-                        print("return: IPAddress(abcdefgh:)")
-                        return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
-                    }
-                    else {
-                        if outi == str.indices.endIndex {
-                            print("invalid format", #line)
-                            return nil
-                        }
-                        else {
-                            let insert = Array(repeating: UInt16(0), count: 8 - sc)
-                            print("xxx", sc, insert,insertionPoint)
-                            u16.insert(contentsOf: insert, at: insertionPoint)
-                            print("u16:", u16)
-                            return IPAddress(u16[0], u16[1], u16[2], u16[3], u16[4], u16[5], u16[6], u16[7], cidr: Int(cidr ?? 128))
-                        }
-                    }
-                }
-            }
-            print("failing parsing", #line)
-            return nil // IPAddress(str)
-        }
+    func test_foo() {
+//        do {
+//            let network = IPAddress(192, 168, 5, 16, cidr: 30)
+//            var iterator = IPAddressIterator(address: network, clamped: true)
+//            while let ip = iterator.next() {
+//                print(ip.debugDescription)
+//            }
+//        }
         do {
-//            for (str, expected, _) in [("a:F::1", IPAddress("::1"), "")] {
-//            for (str, expected, _) in ipv4ParsingZoo {
-            for (str, expected, _) in ipv4ParsingZoo + ipv6ParsingZoo {
-                print("IPAddress.init(\"\(str)\")")
-                let le = parse(str, isLittleEndian: true)
-                XCTAssertEqual(le, expected)
-                print("\t", le as Any, "\n")
-//                let be = parse(str, isLittleEndian: false)
-//                print(be as Any)
+            var iterator = IPAddressIterator(network: IPAddress(255, 255, 254, 0))
+            while let ip = iterator.next() {
+                print(ip.debugDescription) // 0.0.0.0/32, ... 255.255.255.255/32
             }
         }
-    }*/
+    }
+        
     /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
        makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
        the Int's capabilities.
@@ -1535,11 +1369,11 @@ final class PerformanceTests : XCTestCase {
         #endif
         let count = UInt64(IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr).underestimatedHostCount) * 5
         for i in 1...iterations {
-            var a = IPAddressIterator(address: IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr), clamped: true)
-            var b = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr), clamped: true)
-            var c = IPAddressIterator(address: IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr), clamped: true)
-            var d = IPAddressIterator(address: IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr), clamped: true)
-            var e = IPAddressIterator(address: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr), clamped: true)
+            var a = IPAddressIterator(network: IPAddress(UInt8.random(in: 0...UInt8.max), 2, 3, 4, cidr: cidr))
+            var b = IPAddressIterator(network: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, 4, cidr: cidr))
+            var c = IPAddressIterator(network: IPAddress(1, 2, UInt8.random(in: 0...UInt8.max), 4, cidr: cidr))
+            var d = IPAddressIterator(network: IPAddress(1, 2, 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
+            var e = IPAddressIterator(network: IPAddress(1, UInt8.random(in: 0...UInt8.max), 3, UInt8.random(in: 0...UInt8.max), cidr: cidr))
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = a.next() {}
             while let _ = b.next() {}
@@ -1564,11 +1398,11 @@ final class PerformanceTests : XCTestCase {
         var tarr:[Double] = []
         let count = UInt64(IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr).underestimatedHostCount) * 5
         for i in 1...iterations {
-            var a = IPAddressIterator(address: IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr), clamped: true)
-            var b = IPAddressIterator(address: IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr), clamped: true)
-            var c = IPAddressIterator(address: IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr), clamped: true)
-            var d = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr), clamped: true)
-            var e = IPAddressIterator(address: IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr), clamped: true)
+            var a = IPAddressIterator(network: IPAddress(1, 2, UInt16.random(in: 0...UInt16.max), 4, 5, 6, 7, 8, cidr: cidr))
+            var b = IPAddressIterator(network: IPAddress(1, 2, 3, UInt16.random(in: 0...UInt16.max), 5, 6, 7, 8, cidr: cidr))
+            var c = IPAddressIterator(network: IPAddress(1, 2, 3, 4, UInt16.random(in: 0...UInt16.max), 6, 7, 8, cidr: cidr))
+            var d = IPAddressIterator(network: IPAddress(1, 2, 3, 4, 5, UInt16.random(in: 0...UInt16.max), 7, 8, cidr: cidr))
+            var e = IPAddressIterator(network: IPAddress(1, 2, 3, 4, 5, 6, UInt16.random(in: 0...UInt16.max), 8, cidr: cidr))
             let t0 = DispatchTime.now().uptimeNanoseconds
             while let _ = a.next() {}
             while let _ = b.next() {}

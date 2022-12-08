@@ -12,10 +12,35 @@ public struct IPAddress : Codable {
         public init(rawValue:Int) {
             self.rawValue = rawValue
         }
+        /// Don't aallow leading zeroes on ipv6 addresses
+        ///
+        /// Example
+        ///
+        ///     IPAddress("0abc", options: .noLeadingZeros) // nil
         public static let noLeadingZeros   = ParsingOptions(rawValue: 1 << Opts.noLeadingZeros.rawValue)
+        /// Don't allow zero suppression on ipv6 addresses
+        ///
+        /// Example
+        ///
+        ///     IPAddress("ffff::", options: .noZeroSupression) // nil
         public static let noZeroSupression = ParsingOptions(rawValue: 1 << Opts.noZeroSupression.rawValue)
+        /// Don't allow uppercase letters in ipv6 addresses
+        ///
+        /// Example
+        ///
+        ///     IPAddress("ABCD::", options: .noUppercase) // nil
         public static let noUppercase      = ParsingOptions(rawValue: 1 << Opts.noUppercase.rawValue)
+        /// Parse ipv4 addresses only (discards all ipv6 addresses)
+        ///
+        /// Example
+        ///
+        ///     IPAddress("::1", options: .ipv4Only) // nil
         public static let ipv4Only         = ParsingOptions(rawValue: 1 << Opts.ipv4Only.rawValue)
+        /// Parse ipv6 addresses only (discards all ipv4 addresses)
+        ///
+        /// Example
+        ///
+        ///     IPAddress("192.168.5.4", options: .ipv6Only) // nil
         public static let ipv6Only         = ParsingOptions(rawValue: 1 << Opts.ipv6Only.rawValue)
 
         enum Opts : Int, CaseIterable {
@@ -32,8 +57,9 @@ public struct IPAddress : Codable {
             lhs.rawValue < rhs.rawValue
         }
     }
-    /// Data storage for storing ipv6 address type and address bytes
+    /// Data storage for storing ipv6 address type and address bytes (rhs)
     internal let ipv6rhs:UInt64
+    /// Data storage for storing ipv6 address type and address bytes (lhs)
     internal let ipv6lhs:UInt64
 
     /// Data storage for storing an ipv4 address
@@ -49,6 +75,7 @@ public struct IPAddress : Codable {
 
     /// Classless Inter-Domain Routing information attached to this ip address
     public let cidrBits:Int
+    /// Network mask (as bytes)
     public let networkMask:[UInt8]
     @inline(__always)
     private static func genv4MaskBytes(bits:Int) -> [UInt8] {
@@ -133,12 +160,14 @@ public struct IPAddress : Codable {
     /// Initializes an ipv4 address
     ///
     /// Initializes an ipv4 address from UInt32 value.
-    ///
+    /// - Parameters: `UInt32`value representing an ipv4 address.
     /// Initializing IPAddress with UInt32(1) will result in 0.0.0.1 and
     /// with UInt32.max will result in 255.255.255.255.
+    /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
+    /// boundaries.
     public init(_ u32: UInt32, cidr bits:Int = 32) {
-        precondition(Self.validV4CIDRRange.contains(bits))
-        self.cidrBits = bits
+        //precondition(Self.validV4CIDRRange.contains(bits))
+        self.cidrBits = Self.validV4CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV4CIDRRange.upperBound
         self.type = .v4
         self.sysendianIpv4 = u32
         self.ipv6rhs = 0
@@ -150,13 +179,16 @@ public struct IPAddress : Codable {
     ///
     /// Initializes an ipv4 or ipv6 address from given UInt8 bytes.
     /// Bytes must be in big endian byte order (a.k.a. network byte order).
+    /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
+    /// boundaries.
     public init?(bytes:[UInt8], cidr bits:Int? = nil) {
         switch bytes.count {
         case 4:
             let b = bits ?? Self.validV4CIDRRange.upperBound
-            precondition(Self.validV4CIDRRange.contains(b))
+            //precondition(Self.validV4CIDRRange.contains(b))
             self.networkMask = Self.genv4MaskBytes(bits: b)
-            self.cidrBits = b
+            //self.cidrBits = b
+            self.cidrBits = Self.validV4CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV4CIDRRange.upperBound
             self.type = .v4
             self.sysendianIpv4 = Self.systemIsLittleEndian ?
             UInt32(bytes[3]) | UInt32(bytes[2])<<8 | UInt32(bytes[1])<<16 | UInt32(bytes[0])<<24 :
@@ -165,9 +197,10 @@ public struct IPAddress : Codable {
             self.ipv6lhs = 0
         case 16:
             let b = bits ?? Self.validV6CIDRRange.upperBound
-            precondition(Self.validV6CIDRRange.contains(b))
+            //precondition(Self.validV6CIDRRange.contains(b))
             self.networkMask = Self.genv6MaskBytes(bits: b)
-            self.cidrBits = b
+            //self.cidrBits = b
+            self.cidrBits = Self.validV6CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV6CIDRRange.upperBound
             self.type = .v6
             self.sysendianIpv4 = 0
             if Self.systemIsLittleEndian {
@@ -191,7 +224,23 @@ public struct IPAddress : Codable {
 
     /// Initializes an ipv4 or ipv6 address
     ///
-    /// Initializes an ipv4 or ipv6 address from given String.
+    /// Initializes an ipv4 or ipv6 address from a given String. String may contain
+    /// network mask information (cidr) separated with slash (/) character.
+    /// Ip address is initialized as a single host, if network mask is omitted.
+    ///
+    /// - Parameters:
+    ///     - string: `String` value describing an ip address
+    ///     - options: `ParsingOptions` to control parsing
+    ///
+    /// - Returns: `IPAddress` instance or `nil` if address parsing fails.
+    ///
+    /// Examples:
+    ///
+    ///     IPAddress("::1") // 0:0:0:0:0:0:0:1/128
+    ///     IPAddress("192.168.5.4") // 192.168.5.4/32
+    ///     IPAddress("192.168.5.4/28") // 192.168.5.4/28
+    ///     IPAddress("abc/64") // nil (ambiguous)
+    ///     IPAddress("ABCD::", options: .noUppercase) // nil
     public init?(_ string:String, options:ParsingOptions = ParsingOptions()) {
         guard let validAddress = parser(string, options: options) else {
             return nil
@@ -385,10 +434,13 @@ extension IPAddress {
     internal static let validV4CIDRRange:ClosedRange<Int> = (0...32)
     /// Valid range for ipv6 bitmask values
     internal static let validV6CIDRRange:ClosedRange<Int> = (0...128)
-
+    /// Ipv4 localhost instance
     public static let ipv4localhost = IPAddress(2130706432)
+    /// Ipv6 localhost instance
     public static let ipv6localhost = IPAddress(0, 1)
+    /// Ipv4 unspecified address instance
     public static let ipv4unspecifiedAddress = IPAddress(0)
+    /// Ipv6 unspecified instance
     public static let ipv6unspecifiedAddress = IPAddress(0, 0)
     // MARK: -
     /// A Boolean value indicating whether this ip address is an unspecified address
@@ -406,6 +458,7 @@ extension IPAddress {
         :
         ipv6lhs == ~0 && ipv6rhs == ~0
     }
+    /// A Boolean value indicating whether this ip address is a private address
     public var isPrivate:Bool {
         return type == .v4 ?
         IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
@@ -414,12 +467,14 @@ extension IPAddress {
         :
         IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)
     }
+    /// A Boolean value indicating whether this ip address is a link local address
     public var isLinkLocal:Bool {
         return type == .v4 ?
         IPAddress(169, 254, 0, 0, cidr: 16).contains(self)
         :
         IPAddress(0xfe80000000000000, 0, cidr: 10).contains(self)
     }
+    /// A Boolean value indicating whether this ip address is a global address (routable)
     public var isGlobal:Bool {
         self.isUnspecified == false &&
         self.isPrivate == false &&
@@ -428,12 +483,14 @@ extension IPAddress {
         self.isDocumentation == false &&
         self.isBroadcast == false
     }
+    /// A Boolean value indicating whether this ip address is a multicast address
     public var isMulticast:Bool {
         return type == .v4 ?
         IPAddress(224, 0, 0, 0, cidr: 4).contains(self)
         :
         IPAddress(0xff00000000000000, 0, cidr: 8).contains(self)
     }
+    /// A Boolean value indicating whether this ip address is reserved for documentation purposes
     public var isDocumentation:Bool {
         return type == .v4 ?
         IPAddress(192, 0, 2, 0, cidr: 24).contains(self) ||
@@ -443,6 +500,7 @@ extension IPAddress {
         IPAddress(0x20010db800000000, 0, cidr: 32).contains(self)
     }
     // MARK: -
+    /// Ip address bytes in network byte order
     public var networkOrderedAddressBytes:[UInt8] {
         switch type {
         case .v4:
@@ -507,18 +565,22 @@ extension IPAddress {
             }
         }
     }
+    /// Ip address Data (in network byte order)
     public var rawAddressBytes:Data {
         return Data(networkOrderedAddressBytes)
     }
+    /// Underestimated host count of this address
+    ///
+    /// - Returns: Understimated host count of the network
+    ///
+    /// - Note: Returns correct host count for all ipv4 cidr values.
+    /// Returns Int.max for ipv6 addresses with cidr value smaller than 66.
     public var underestimatedHostCount:Int {
         if type == .v4, Self.validV4CIDRRange.contains(cidrBits) {
-            let v4:[Int] = [4294967296, 2147483648, 1073741824, 536870912, 268435456, 134217728, 67108864, 33554432, 16777216, 8388608, 4194304, 2097152, 1048576, 524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1]
-            return cidrBits < v4.count ? v4[cidrBits] : Int.max
+            return Int(1) << (Self.validV4CIDRRange.upperBound - cidrBits)
         }
         else {
-            let v6:[Int] = [4611686018427387904, 2305843009213693952, 1152921504606846976, 576460752303423488, 288230376151711744, 144115188075855872, 72057594037927936, 36028797018963968, 18014398509481984, 9007199254740992, 4503599627370496, 2251799813685248, 1125899906842624, 562949953421312, 281474976710656, 140737488355328, 70368744177664, 35184372088832, 17592186044416, 8796093022208, 4398046511104, 2199023255552, 1099511627776, 549755813888, 274877906944, 137438953472, 68719476736, 34359738368, 17179869184, 8589934592, 4294967296, 2147483648, 1073741824, 536870912, 268435456, 134217728, 67108864, 33554432, 16777216, 8388608, 4194304, 2097152, 1048576, 524288, 262144, 131072, 65536, 32768, 16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1]
-            let c = cidrBits - 66
-            return (0..<v6.count).contains(c) ? v6[c] : Int.max
+            return (cidrBits < 66) ? Int.max : Int(1) << (Self.validV6CIDRRange.upperBound - cidrBits)
         }
     }
 
@@ -526,16 +588,16 @@ extension IPAddress {
     /// Network address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
-    /// (is a single end point). Othervice returns network address of the network this ip belongs to with cidr set to
-    /// the corresponding network.
+    /// (is a single end point). Othervice returns network address of the network
+    ///  this ip belongs to with cidr set to the corresponding network.
     public var networkAddress:IPAddress? {
         return IPAddress(bytes: zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
     }
     /// Router address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
-    /// (is a single end point). Othervice returns router's ip address of the network with cidr set to
-    /// the corresponding network.
+    /// (is a single end point). Othervice returns router's ip address of the network
+    /// with cidr set to the corresponding network.
     public var routerAddress:IPAddress? {
         switch type {
         case .v4:
@@ -559,8 +621,8 @@ extension IPAddress {
     /// Broadcast address of the network this ip address belongs to
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network
-    /// (is a single end point). Othervice returns first ip address of the network with cidr set to
-    /// the corresponding network.
+    /// (is a single end point). Othervice returns first ip address of the network
+    /// with cidr set to the corresponding network.
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
@@ -578,10 +640,19 @@ extension IPAddress {
         }
     }
     // MARK: -
-    /// A boolean value indicating wheter this ip address contains the other ip address
+    /// A boolean value indicating wheter this ip address instance contains the other ip address entirely
     ///
+    /// Examples:
+    ///
+    ///     IPAddress(192, 168, 5, 4, cidr: 22).contains(IPAddress(192, 168, 4, 0)) // true
+    ///     IPAddress(192, 168, 5, 4, cidr: 22).contains(IPAddress(192, 168, 7, 255)) // true
+    ///     IPAddress(192, 168, 5, 4, cidr: 22).contains(IPAddress(192, 168, 3, 255)) // false
+    ///     IPAddress(192, 168, 5, 4, cidr: 22).contains(IPAddress(192, 168, 8, 0)) // false
+    ///
+    /// - Parameters:
+    ///     - other: `IPAddress` instance
     /// - Returns: Returns false when address types don't match.
-    /// In case `self` or `other` are network addresses, returns true only if
+    /// When `self` or `other` are network addresses, returns true only if
     /// `self` contains `other` entirely.
     public func contains(_ other:IPAddress) -> Bool {
         guard self != other else {
@@ -662,30 +733,35 @@ extension IPAddress {
     }
     // MARK: -
     /// Initializes an ipv6 address
+    ///
+    /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV6CIDRRange`
+    /// boundaries.
+    ///
+    /// Example
+    ///
+    ///     IPAddress(0x2001_0db8_0000_0000, 1) // 2001:db8::1/128
     internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
-        precondition(Self.validV6CIDRRange.contains(bits))
+        //precondition(Self.validV6CIDRRange.contains(bits))
+        self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
         self.type = .v6
         self.sysendianIpv4 = 0
         self.ipv6lhs = lhs
         self.ipv6rhs = rhs
-        self.cidrBits = bits
+        //self.cidrBits = bits
         self.networkMask = Self.genv6MaskBytes(bits: bits)
     }
     /// Initializes an ipv4 address
-    public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8) {
-        self.cidrBits = Self.validV4CIDRRange.upperBound
-        self.type = .v4
-        self.sysendianIpv4 = Self.systemIsLittleEndian ?
-        UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
-        UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
-        self.ipv6rhs = 0
-        self.ipv6lhs = 0
-        self.networkMask = Self.genv4MaskBytes(bits: Self.validV4CIDRRange.upperBound)
-    }
-    /// Initializes an ipv4 address
+    ///
+    /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
+    /// boundaries.
+
+    /// Example
+    ///
+    ///     IPAddress(192, 168, 5, 4) // 192.168.5.4/32
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
-        precondition(Self.validV4CIDRRange.contains(bits))
-        self.cidrBits = bits
+        // precondition(Self.validV4CIDRRange.contains(bits))
+        self.cidrBits = Self.validV4CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV4CIDRRange.upperBound
+        //self.cidrBits = bits
         self.type = .v4
         self.sysendianIpv4 = Self.systemIsLittleEndian ?
         UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
@@ -695,32 +771,14 @@ extension IPAddress {
         self.networkMask = Self.genv4MaskBytes(bits: bits)
     }
     /// Initializes an ipv6 address
-    public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16) {
-        self.cidrBits = Self.validV6CIDRRange.upperBound
-        self.networkMask = Self.genv6MaskBytes(bits: Self.validV6CIDRRange.upperBound)
-        if Self.systemIsLittleEndian {
-            self.ipv6rhs =
-            UInt64(h) | UInt64(g)<<16 |
-            UInt64(f)<<32 | UInt64(e)<<48
-            self.ipv6lhs =
-            UInt64(d) | UInt64(c)<<16 |
-            UInt64(b)<<32 | UInt64(a)<<48
-        }
-        else {
-            self.ipv6rhs =
-            UInt64(a.byteSwapped) | UInt64(b.byteSwapped)<<16 |
-            UInt64(c.byteSwapped)<<32 | UInt64(d.byteSwapped)<<48
-            self.ipv6lhs =
-            UInt64(e.byteSwapped) | UInt64(f.byteSwapped)<<16 |
-            UInt64(g.byteSwapped)<<32 | UInt64(h.byteSwapped)<<48
-        }
-        self.type = .v6
-        self.sysendianIpv4 = 0
-    }
-    /// Initializes an ipv6 address
+    ///
+    /// Example
+    ///
+    ///     IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1) // 2001:db8::1/128
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
-        precondition(Self.validV6CIDRRange.contains(bits))
-        self.cidrBits = bits
+        //precondition(Self.validV6CIDRRange.contains(bits))
+        self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
+        //self.cidrBits = bits
         self.networkMask = Self.genv6MaskBytes(bits: bits)
         if Self.systemIsLittleEndian {
             self.ipv6rhs =
@@ -741,40 +799,136 @@ extension IPAddress {
         self.sysendianIpv4 = 0
         self.type = .v6
     }
-    /// Initializes an ipv4 or ipv6 address from Data
+    /// Initializes an ipv4 or ipv6 address from Data.
+    ///
+    /// - Parameters:
+    ///     - data: `Data` bytes representing the ip address in network byte order
+    ///     - cidr: Optional `Int` value Network mask bits
+    /// - Returns: Ipv4 or ipv6 address instance or `nil` if data `count`
+    /// is not 4 or 16
+    /// - Note: Data bytes (representing an ip address) must be in network
+    /// byte order
     public init?(data:Data, cidr bits:Int? = nil) {
         self.init(bytes: data.withUnsafeBytes({ Array($0) }), cidr: bits)
     }
+    /// Initializes an ip address from other instance of an ip address
+    ///
+    /// - Parameters:
+    ///     - other: `IPAddress` instance to use as base
+    ///     - cidr: Network mask bits
+    /// - Returns: IPAddress instance
+    /// byte order
+    public init(_ other:IPAddress, cidr bits:Int? = nil) {
+        if other.type == .v4 {
+            self.init(other.sysendianIpv4, cidr: bits ?? Self.validV4CIDRRange.upperBound)
+        }
+        else {
+            self.init(other.ipv6lhs, other.ipv6rhs, cidr: bits ?? Self.validV6CIDRRange.upperBound)
+        }
+    }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
-        UInt16(256).littleEndian & 0x00ff == 0
+        UInt16(256)/*.littleEndian*/ & 0x00ff == 0
+    }
+}
+// MARK: -
+extension IPAddress : Strideable {
+    public typealias Stride = Int
+    public func distance(to other: IPAddress) -> Int {
+        precondition(type == other.type, "\(#function) requires ip address types to be equal, got \(type) and \(other.type)")
+        precondition(type == .v4, "\(#function) not available for \(IPAddress.IPAddrType.v6) ip addresses")
+        return Int(other.sysendianIpv4) - Int(sysendianIpv4)
+    }
+    public func advanced(by n: Int) -> IPAddress {
+        if type == .v4 {
+            return n.signum() == -1 ?
+            advanced(by: n, clamped: false) ?? IPAddress(0, cidr: cidrBits)
+            :
+            advanced(by: n, clamped: false) ?? IPAddress(UInt32.max, cidr: cidrBits)
+        }
+        else {
+            return n.signum() == -1 ?
+            advanced(by: n, clamped: false) ?? IPAddress(0, 0, cidr: cidrBits)
+            :
+            advanced(by: n, clamped: false) ?? IPAddress(UInt64.max, UInt64.max, cidr: cidrBits)
+        }
     }
 }
 // MARK: -
 /// An iterator over the elements of type IPAddress
+///
+/// Iterates over a defined network or the whole addressable range.
+///
+/// Example: Iterate over all ipv4 addresses of a specific network
+///
+///     let network = IPAddress(192, 168, 5, 16, cidr: 30)
+///     var iterator = IPAddressIterator(address: network, clamped: true)
+///     while let ip = iterator.next() {
+///         print(ip.debugDescription) // 192.168.5.16/30, 192.168.5.17/30, 192.168.5.18/30, 192.168.5.19/30
+///     }
+///
+/// Example: Iterate over the whole ipv4 adressable range
+///
+///     var iterator = IPAddressIterator(address: IPAddress(0, 0, 0, 0))
+///     while let ip = iterator.next() {
+///         print(ip.debugDescription) // 0.0.0.0/32, ... 255.255.255.255/32
+///     }
 public struct IPAddressIterator : IteratorProtocol {
     public typealias Element = IPAddress
 
-    private (set) public var address:IPAddress?
+    private var address:IPAddress?
     private let limit:IPAddress
-    private let clamped:Bool
-    private lazy var isLittleEndian = {
-        UInt16(256).littleEndian & 0x00ff == 0
-    }()
+    private let isRange:Bool
 
-    public init(address:IPAddress, clamped:Bool = false) {
-        self.address = address.networkAddress ?? address
-        self.limit = address.broadcastAddress ?? address
-        self.clamped = clamped
+    /// Initializes an IPAddressIterator for iterating over a specific network block
+    ///
+    /// - Parameters:
+    ///     - network: `IPAddress` instance defining the network block
+    /// - Returns: `IPAddressIterator` instance
+    public init(network:IPAddress) {
+        self.isRange = false
+        self.address = network.networkAddress ?? network
+        self.limit = network.broadcastAddress ?? network
     }
 
+    /// Initializes an IPAddressIterator for iterating over a specific range of ip addresses
+    ///
+    /// - Parameters:
+    ///     - range: `ClosedRange<IPAddress>` instance defining the range for iteration
+    /// - Returns: `IPAddressIterator` instance
+    public init(range:ClosedRange<IPAddress>) {
+        self.isRange = true
+        self.address = range.lowerBound
+        self.limit = range.upperBound
+    }
+
+    /// Get next IPAddress instance
+    ///
+    /// - Returns: IPAddress instance or `nil` when there are no more ip addresses
+    /// for the defined network (clamped) or there are no more ip addresses for the
+    /// addressable range.
+    ///
+    /// Example: Iterate over all ipv4 addresses of a specific network
+    ///
+    ///     let network = IPAddress(192, 168, 5, 16, cidr: 30)
+    ///     var iterator = IPAddressIterator(network: network)
+    ///     while let ip = iterator.next() {
+    ///         print(ip.debugDescription) // 192.168.5.16/30, 192.168.5.17/30, 192.168.5.18/30, 192.168.5.19/30
+    ///     }
+    ///
+    /// Example: Iterate over the whole ipv4 adressable range
+    ///
+    ///     var iterator = IPAddressIterator(range: IPAddress(0, 0, 0, 0)...IPAddress(255, 255, 255, 255))
+    ///     while let ip = iterator.next() {
+    ///         print(ip.debugDescription) // 0.0.0.0/32, ... 255.255.255.255/32
+    ///     }
     mutating public func next() -> Element? {
         guard let address = self.address else {
             return nil
         }
         switch address.type {
         case .v4:
-            guard address <= limit || clamped == false else { return nil }
+            guard address <= limit else { return nil }
             if address.sysendianIpv4 == UInt32.max {
                 defer {
                     self.address = nil
@@ -786,7 +940,7 @@ public struct IPAddressIterator : IteratorProtocol {
             }
             return self.address
         case .v6:
-            guard address <= limit || clamped == false else {
+            guard address <= limit else {
                 return nil
             }
             if address.ipv6rhs == UInt64.max {
@@ -813,18 +967,50 @@ public struct IPAddressIterator : IteratorProtocol {
     }
 }
 // MARK: -
-/// A type providing sequential, iterated access to IPAddress elements.
+/// A type providing sequential, iterated access to IPAddress elements
 public struct IPAddressSequence: Sequence {
+    /// First ip address in the sequence
     public let startAddress: IPAddress
+    /// Last ip address in the sequence
     public let endAddress: IPAddress
-    public init(address:IPAddress) {
-        self.startAddress = address.networkAddress ?? address
-        self.endAddress = address.broadcastAddress ?? address
+    private let isRange:Bool
+    /// Initializes IPAddressSequence instance
+    public init(network:IPAddress) {
+        self.isRange = false
+        self.startAddress = network.networkAddress ?? network
+        self.endAddress = network.broadcastAddress ?? network
     }
+    public init(range:ClosedRange<IPAddress>) {
+        precondition(range.lowerBound.type == range.upperBound.type)
+        self.isRange = true
+        if range.lowerBound.type == .v4 {
+            self.startAddress = IPAddress(range.lowerBound, cidr: IPAddress.validV4CIDRRange.upperBound)
+            self.endAddress = IPAddress(range.upperBound, cidr: IPAddress.validV4CIDRRange.upperBound)
+        }
+        else {
+            self.startAddress = IPAddress(range.lowerBound, cidr: IPAddress.validV6CIDRRange.upperBound)
+            self.endAddress = IPAddress(range.upperBound, cidr: IPAddress.validV6CIDRRange.upperBound)
+        }
+    }
+    /// Initializes `IPAddressIterator` instance
     public func makeIterator() -> IPAddressIterator {
-        IPAddressIterator(address: startAddress)
+        self.isRange ? IPAddressIterator(range: startAddress...endAddress) : IPAddressIterator(network: startAddress)
     }
+    /// A value less than or equal to the number of elements in the sequence,
+    /// calculated nondestructively.
     public var underestimatedCount: Int {
-        startAddress.underestimatedHostCount
+        guard isRange else {
+            return startAddress.underestimatedHostCount
+        }
+        if self.startAddress.type == .v4 {
+            return Int(endAddress.sysendianIpv4 - startAddress.sysendianIpv4) + 1
+        }
+        else {
+            let s = endAddress.ipv6rhs - startAddress.ipv6rhs
+            if s < UInt64(Int.max), startAddress.ipv6lhs == endAddress.ipv6lhs {
+                return Int(s) + 1
+            }
+        }
+        return Int.max
     }
 }
