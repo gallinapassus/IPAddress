@@ -883,59 +883,38 @@ final class IPAddressTests: XCTestCase {
         XCTAssertNil(IPAddress("::abcd", options: .noZeroSupression))
         XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSupression))
     }
-    func test_foo() {
-//        do {
-//            let network = IPAddress(192, 168, 5, 16, cidr: 30)
-//            var iterator = IPAddressIterator(address: network, clamped: true)
-//            while let ip = iterator.next() {
-//                print(ip.debugDescription)
-//            }
-//        }
-        do {
-            var iterator = IPAddressIterator(network: IPAddress(255, 255, 254, 0))
-            while let ip = iterator.next() {
-                print(ip.debugDescription) // 0.0.0.0/32, ... 255.255.255.255/32
-            }
+    func test_codable() {
+        do { // v4
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let ip = IPAddress(192, 0, 2, 1, cidr: 22)
+            let encodedData = try encoder.encode(ip)
+            //print(ip.debugDescription, "=>\n", String(data: encodedData, encoding: .utf8)!)
+            let decoder = JSONDecoder()
+            let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
+            //print(decodedIP.debugDescription)
+            XCTAssertEqual(ip, decodedIP)
+        } catch let e {
+            var str = ""
+            dump(e, to: &str)
+            XCTFail(str)
+        }
+        do { // v6
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let ip = IPAddress(0x20010db800000000, 0, cidr: 32)
+            let encodedData = try encoder.encode(ip)
+            //print(ip.compactDebugDescription, "=>\n", String(data: encodedData, encoding: .utf8)!)
+            let decoder = JSONDecoder()
+            let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
+            //print(decodedIP.compactDebugDescription)
+            XCTAssertEqual(ip, decodedIP)
+        } catch let e {
+            var str = ""
+            dump(e, to: &str)
+            XCTFail(str)
         }
     }
-        
-    /* Now for-in loops would be fun but Strideable protocol's distance(to other:) -> Int
-       makes it challenging for ipv6 addresses as ipv6 can have distances way beyond
-       the Int's capabilities.
-     
-    func test_strideable() {
-        do { // v4
-            let cidr = 30
-            let expected = [
-                IPAddress(192, 168, 13, 4, cidr: cidr)!,
-                IPAddress(192, 168, 13, 5, cidr: cidr)!,
-                IPAddress(192, 168, 13, 6, cidr: cidr)!,
-                IPAddress(192, 168, 13, 7, cidr: cidr)!,
-            ]
-            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
-
-            let distance = expected.first!.distance(to: expected.last!)
-            XCTAssertEqual(distance, 3)
-            for (value,expected) in zip(stride(from: ip.networkAddress!, through: ip.broadcastAddress!, by: 1), expected) {
-                XCTAssertEqual(value, expected)
-            }
-        }
-        do { // v4
-            let cidr = 27
-            let expected = [
-                IPAddress(192, 168, 13, 6, cidr: cidr)!,
-                IPAddress(192, 168, 13, 2, cidr: cidr)!,
-            ]
-            let ip = IPAddress(192, 168, 13, 6, cidr: cidr)!
-            
-            let distance = ip.distance(to: ip.networkAddress!)
-            XCTAssertEqual(distance, -6)
-            for (value,expected) in zip(stride(from: ip, through: ip.networkAddress!, by: -4), expected) {
-                XCTAssertEqual(value, expected)
-            }
-        }
-    }
-     */
 }
 
 extension Array {
@@ -1504,7 +1483,6 @@ final class PerformanceTests : XCTestCase {
         // system_profiler SPSoftwareDataType SPHardwareDataType
         var elements:[String] = []
         let info = ProcessInfo.processInfo
-        elements.append("Operating system \(info.operatingSystemVersionString)")
 #if os(Linux)
         elements.append("\(fmttr(Double(info.physicalMemory), " bytes of memory"))")
 #elseif os(macOS)
@@ -1519,6 +1497,7 @@ final class PerformanceTests : XCTestCase {
         measurement.convert(to: UnitInformationStorage.gibibytes)
         combined.append("\(measurement.description) of memory")
         elements.append(combined.joined(separator: ", "))
+        elements.append("Operating system \(info.operatingSystemVersionString)")
 #endif
         return elements.joined(separator: "\n")
     }
@@ -1639,8 +1618,8 @@ let ipv6ParsingZoo:[(in:String,value:IPAddress?,out:String?)] = [
     ("1:2:3:4:5:6:7:8/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 8, cidr: 18), "1:2:3:4:5:6:7:8"),
     ("1:2:3:4:5:6:7:dead/18", IPAddress(1, 2, 3, 4, 5, 6, 7, 57005, cidr: 18), "1:2:3:4:5:6:7:dead"),
     ("::1/128", IPAddress(0, 0, 0, 0, 0, 0, 0, 1, cidr: 128), "::1"),
-    // ("::1/129", nil, nil), // invalid cidr => precondition crash
-    //("::A/128", nil, nil), // relaxed = true => ok, relaxed = false => should fails because of uppercase
+    ("::1/129", IPAddress(0, 1), "::1"), // invalid cidr => precondition crash
+    ("::A/128", IPAddress(0,10), "::a"), // relaxed parsing is default  => ok
     ("1::", IPAddress(1, 0, 0, 0, 0, 0, 0, 0), "1::"),
     ("dead::beef:1/64", IPAddress(57005, 0, 0, 0, 0, 0, 48879, 1, cidr: 64), "dead::beef:1"),
     ("ffff:/64", nil, nil), // invalid format, should have "::" at the end
