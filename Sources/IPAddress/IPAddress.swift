@@ -17,7 +17,7 @@ public struct IPAddress : Codable {
         /// Example
         ///
         ///     IPAddress("0abc", options: .noLeadingZeros) // nil
-        public static let noLeadingZeros   = ParsingOptions(rawValue: 1 << Opts.noLeadingZeros.rawValue)
+        public static let noLeadingZeros = ParsingOptions(rawValue: 1 << Opts.noLeadingZeros.rawValue)
         /// Don't allow zero suppression on ipv6 addresses
         ///
         /// Example
@@ -29,19 +29,19 @@ public struct IPAddress : Codable {
         /// Example
         ///
         ///     IPAddress("ABCD::", options: .noUppercase) // nil
-        public static let noUppercase      = ParsingOptions(rawValue: 1 << Opts.noUppercase.rawValue)
+        public static let noUppercase = ParsingOptions(rawValue: 1 << Opts.noUppercase.rawValue)
         /// Parse ipv4 addresses only (discards all ipv6 addresses)
         ///
         /// Example
         ///
         ///     IPAddress("::1", options: .ipv4Only) // nil
-        public static let ipv4Only         = ParsingOptions(rawValue: 1 << Opts.ipv4Only.rawValue)
+        public static let ipv4Only = ParsingOptions(rawValue: 1 << Opts.ipv4Only.rawValue)
         /// Parse ipv6 addresses only (discards all ipv4 addresses)
         ///
         /// Example
         ///
         ///     IPAddress("192.168.5.4", options: .ipv6Only) // nil
-        public static let ipv6Only         = ParsingOptions(rawValue: 1 << Opts.ipv6Only.rawValue)
+        public static let ipv6Only = ParsingOptions(rawValue: 1 << Opts.ipv6Only.rawValue)
 
         enum Opts : Int, CaseIterable {
             case noLeadingZeros
@@ -73,13 +73,13 @@ public struct IPAddress : Codable {
     /// address 0.0.0.1 and UInt32.max will result in 255.255.255.255.
     internal let sysendianIpv4:UInt32
 
-    /// Classless Inter-Domain Routing information attached to this ip address
+    /// Classless Inter-Domain Routing (cidr) information attached to this ip address
     public let cidrBits:Int
     /// Network mask (as bytes)
     public let networkMask:[UInt8]
     @inline(__always)
     private static func genv4MaskBytes(bits:Int) -> [UInt8] {
-        let lhs = UInt32.max<<(32-bits)
+        let lhs = UInt32.max<<(32 - bits)
         if Self.systemIsLittleEndian {
             return [
                 UInt8((lhs & 0xff000000)>>24),
@@ -104,10 +104,10 @@ public struct IPAddress : Codable {
         let f = 128 - bits
         if f > 64 {
             rhs = 0
-            lhs = lhs<<(f - 64)
+            lhs = lhs << (f - 64)
         }
         else {
-            rhs = rhs<<f
+            rhs = rhs << f
         }
         let returnValue:[UInt8]
         if Self.systemIsLittleEndian {
@@ -160,13 +160,15 @@ public struct IPAddress : Codable {
     /// Initializes an ipv4 address
     ///
     /// Initializes an ipv4 address from UInt32 value.
-    /// - Parameters: `UInt32`value representing an ipv4 address.
+    /// - Parameters:
+    ///     - u32: `UInt32`value defining an ipv4 address
+    ///     - cidr: Classless Inter-Domain Routing value (defining the network mask
+    ///     for this address)
     /// Initializing IPAddress with UInt32(1) will result in 0.0.0.1 and
     /// with UInt32.max will result in 255.255.255.255.
     /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
     /// boundaries.
     public init(_ u32: UInt32, cidr bits:Int = 32) {
-        //precondition(Self.validV4CIDRRange.contains(bits))
         self.cidrBits = Self.validV4CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV4CIDRRange.upperBound
         self.type = .v4
         self.sysendianIpv4 = u32
@@ -178,16 +180,18 @@ public struct IPAddress : Codable {
     /// Initializes an ipv4 or ipv6 address
     ///
     /// Initializes an ipv4 or ipv6 address from given UInt8 bytes.
-    /// Bytes must be in big endian byte order (a.k.a. network byte order).
+    /// - Parameters:
+    ///     - bytes: `Array<UInt8>`of bytes (in network byte order) defining the ip address
+    ///     - cidr: Classless Inter-Domain Routing value (defining the network mask
+    ///     for this address)
+    /// - Returns: `IPAddress` instance or `nil`
     /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
-    /// boundaries.
+    /// boundaries. Cidr value of `nil` will result to a single host ip address.
     public init?(bytes:[UInt8], cidr bits:Int? = nil) {
         switch bytes.count {
         case 4:
             let b = bits ?? Self.validV4CIDRRange.upperBound
-            //precondition(Self.validV4CIDRRange.contains(b))
             self.networkMask = Self.genv4MaskBytes(bits: b)
-            //self.cidrBits = b
             self.cidrBits = Self.validV4CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV4CIDRRange.upperBound
             self.type = .v4
             self.sysendianIpv4 = Self.systemIsLittleEndian ?
@@ -197,9 +201,7 @@ public struct IPAddress : Codable {
             self.ipv6lhs = 0
         case 16:
             let b = bits ?? Self.validV6CIDRRange.upperBound
-            //precondition(Self.validV6CIDRRange.contains(b))
             self.networkMask = Self.genv6MaskBytes(bits: b)
-            //self.cidrBits = b
             self.cidrBits = Self.validV6CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV6CIDRRange.upperBound
             self.type = .v6
             self.sysendianIpv4 = 0
@@ -741,13 +743,11 @@ extension IPAddress {
     ///
     ///     IPAddress(0x2001_0db8_0000_0000, 1) // 2001:db8::1/128
     internal init(_ lhs:UInt64, _ rhs:UInt64, cidr bits:Int = 128) {
-        //precondition(Self.validV6CIDRRange.contains(bits))
         self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
         self.type = .v6
         self.sysendianIpv4 = 0
         self.ipv6lhs = lhs
         self.ipv6rhs = rhs
-        //self.cidrBits = bits
         self.networkMask = Self.genv6MaskBytes(bits: bits)
     }
     /// Initializes an ipv4 address
@@ -759,9 +759,7 @@ extension IPAddress {
     ///
     ///     IPAddress(192, 168, 5, 4) // 192.168.5.4/32
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
-        // precondition(Self.validV4CIDRRange.contains(bits))
         self.cidrBits = Self.validV4CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV4CIDRRange.upperBound
-        //self.cidrBits = bits
         self.type = .v4
         self.sysendianIpv4 = Self.systemIsLittleEndian ?
         UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
@@ -776,9 +774,7 @@ extension IPAddress {
     ///
     ///     IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1) // 2001:db8::1/128
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
-        //precondition(Self.validV6CIDRRange.contains(bits))
         self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
-        //self.cidrBits = bits
         self.networkMask = Self.genv6MaskBytes(bits: bits)
         if Self.systemIsLittleEndian {
             self.ipv6rhs =
@@ -828,7 +824,7 @@ extension IPAddress {
     }
     /// A boolean value indicating wheter current system is little endian
     private static var systemIsLittleEndian:Bool {
-        UInt16(256)/*.littleEndian*/ & 0x00ff == 0
+        UInt16(256) & 0x00ff == 0
     }
 }
 // MARK: -
@@ -975,11 +971,26 @@ public struct IPAddressSequence: Sequence {
     public let endAddress: IPAddress
     private let isRange:Bool
     /// Initializes IPAddressSequence instance
+    ///
+    /// - Parameters:
+    ///     - network: IPAddress instance defining the network block as
+    ///     target for this sequence
+    /// - Returns: IPAddressSequence instance providing sequential,
+    /// iterated access to all IPAddress elements of this network block
     public init(network:IPAddress) {
         self.isRange = false
         self.startAddress = network.networkAddress ?? network
         self.endAddress = network.broadcastAddress ?? network
     }
+    /// Initializes IPAddressSequence instance
+    ///
+    /// Provides a sequence of all ip addresses defined by the range.
+    /// - Parameters:
+    ///     - range: IPAddress range defining the lower and upper bounds of this sequence
+    /// - Returns: IPAddressSequence instance providing sequential, iterated access to all
+    /// IPAddress elements defined by the range
+    /// - Note: Sequence elements are returned as single host ip addresses (cidr = 32 for
+    /// ipv4 addresses and cidr = 128 for ipv6 addresses).
     public init(range:ClosedRange<IPAddress>) {
         precondition(range.lowerBound.type == range.upperBound.type)
         self.isRange = true
@@ -993,6 +1004,8 @@ public struct IPAddressSequence: Sequence {
         }
     }
     /// Initializes `IPAddressIterator` instance
+    ///
+    /// - Returns: An iterator over the elements of type IPAddress
     public func makeIterator() -> IPAddressIterator {
         self.isRange ? IPAddressIterator(range: startAddress...endAddress) : IPAddressIterator(network: startAddress)
     }
