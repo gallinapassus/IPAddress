@@ -834,7 +834,7 @@ extension IPAddress {
         }
         return ona >= na && oba <= ba
     }
-    /// Returns a ip address that is offset the specified distance from this ip address.
+    /// Returns an ip address that is offset the specified distance from this ip address.
     ///
     /// - Returns: When clamping is `false`, returns an ip address (with single
     ///  endpoint cidr) that is offset the specified distance from this ip address.
