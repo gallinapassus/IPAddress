@@ -73,7 +73,12 @@ public struct IPAddress : Codable {
     /// address 0.0.0.1 and UInt32.max will result in 255.255.255.255.
     internal let sysendianIpv4:UInt32
 
-    /// Classless Inter-Domain Routing (cidr) information attached to this ip address
+    /// Classless Inter-Domain Routing (CIDR) information attached to this ip address
+    ///
+    /// ## SeeAlso
+    ///
+    /// More information about CIDR, see [Wikipedia article](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
+    ///
     public let cidrBits:Int
     /// Network mask (as bytes)
     public let networkMask:[UInt8]
@@ -251,7 +256,8 @@ public struct IPAddress : Codable {
     }
 }
 // MARK: -
-extension IPAddress : Equatable {
+// MARK: Equatable, Hashable, Comparable
+extension IPAddress : Equatable, Hashable, Comparable {
     ///
     /// Returns a boolean value indicating if two IPAddress
     /// instances are representing exactly the same ip address
@@ -267,15 +273,11 @@ extension IPAddress : Equatable {
         lhs.sysendianIpv4 == rhs.sysendianIpv4 && lhs.cidrBits == rhs.cidrBits :
         lhs.ipv6lhs == rhs.ipv6lhs && lhs.ipv6rhs == rhs.ipv6rhs && lhs.cidrBits == rhs.cidrBits
     }
-}
-extension IPAddress : Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(type.rawValue)
         hasher.combine(networkOrderedAddressBytes)
         hasher.combine(cidrBits)
     }
-}
-extension IPAddress : Comparable {
     public static func < (lhs: IPAddress, rhs: IPAddress) -> Bool {
         switch lhs.type {
         case .v4:
@@ -305,7 +307,21 @@ extension IPAddress : Comparable {
         }
     }
 }
-extension IPAddress : CustomStringConvertible {
+// MARK: -
+// MARK: CustomStringConvertible, CustomDebugStringConvertible
+extension IPAddress : CustomStringConvertible, CustomDebugStringConvertible {
+    /// Description of the ip address
+    ///
+    /// Address representation doesn't include cidr notation. Use `debugDescription` to include cidr notation.
+    ///
+    /// - Note: Suppresses leading zeroes from ipv6 address segments.
+    ///
+    /// Example:
+    ///
+    ///     let ipv4 = IPAddress(192, 0, 2, 1)
+    ///     ipv4.description // 192.0.2.1
+    ///     let ipv6 = IPAddress(0x2001, 0x0db8, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0001)
+    ///     ipv6.description // 2001:db8:0:0:0:0:0:1
     public var description: String {
         switch type {
         case .v4:
@@ -354,6 +370,19 @@ extension IPAddress : CustomStringConvertible {
             return str
         }
     }
+    /// Compact description of the ip address
+    ///
+    /// Suppresses leading zeroes from ipv6 addresses and uses double colon (::) to
+    /// shorten the address representation when address has multiple consecutive
+    /// all zeroes parts.
+    ///
+    /// Example:
+    ///
+    ///     let ip = IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+    ///     ip.description // 2001:db8:0:0:0:0:0:1
+    ///     ip.compactDescription // 2001:db8::1
+    ///
+    /// For ipv4 addresses `compactDescription` returns a value equal to `description`
     public var compactDescription:String {
         guard type == .v6 else {
             return description
@@ -421,11 +450,34 @@ extension IPAddress : CustomStringConvertible {
         
         return h + t
     }
-}
-extension IPAddress : CustomDebugStringConvertible {
+    /// Debug description of the ip address
+    ///
+    /// Address representation including the cidr notation. Use `description` to get plain address without cidr notation.
+    ///
+    /// - Note: Suppresses leading zeroes from ipv6 address segments.
+    ///
+    /// Example:
+    ///
+    ///     let ipv4 = IPAddress(192, 0, 2, 1)
+    ///     ipv4.debugDescription // 192.0.2.1/32
+    ///     let ipv6 = IPAddress(0x2001, 0x0db8, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0001)
+    ///     ipv6.debugDescription // 2001:db8:0:0:0:0:0:1/128
     public var debugDescription: String {
         return description + "/\(cidrBits)"
     }
+    /// Compact debug description of the ip address
+    ///
+    /// Address representation including the cidr notation. Suppresses leading zeroes
+    /// from ipv6 addresses and uses double colon (::) to shorten the address
+    /// representation when address has multiple consecutive all zeroes parts.
+    ///
+    /// Example:
+    ///
+    ///     let ip = IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+    ///     ip.debugDescription // 2001:db8:0:0:0:0:0:1/128
+    ///     ip.compactDebugDescription // 2001:db8::1/128
+    ///
+    /// For ipv4 addresses `compactDescription` returns a value equal to `description`
     public var compactDebugDescription:String {
         return compactDescription + "/\(cidrBits)"
     }
@@ -437,23 +489,65 @@ extension IPAddress {
     /// Valid range for ipv6 bitmask values
     internal static let validV6CIDRRange:ClosedRange<Int> = (0...128)
     /// Ipv4 localhost instance
-    public static let ipv4localhost = IPAddress(2130706432)
+    ///
+    /// - Returns: `IPAddress` instance representing 127.0.0.1/32
+    ///
+    /// Example:
+    ///
+    ///     IPAddress.ipv4localhost // 127.0.0.1/32
+    public static let ipv4localhost = IPAddress(2130706433)
     /// Ipv6 localhost instance
+    ///
+    /// - Returns: `IPAddress` instance representing 0:0:0:0:0:0:0:1/128
+    ///
+    /// Example:
+    ///
+    ///     IPAddress.ipv6localhost // 0:0:0:0:0:0:0:1/128
     public static let ipv6localhost = IPAddress(0, 1)
+    /// A Boolean value indicating whether this ip address is a localhost address
+    ///
+    /// - Note: Only the address part is used in evaluation (cidr value is *ignored*).
+    /// Use `ip.isLocalhost && ip.isSingleEndPoint`
+    /// instead of `isLocalhost` if cidr comparison is required by your application.
+    public var isLocalhost:Bool {
+        type == .v4 ? sysendianIpv4 == 2130706433 : ipv6lhs == 0 && ipv6rhs == 1
+    }
     /// Ipv4 unspecified address instance
+    ///
+    /// - Returns: `IPAddress` instance representing 0.0.0.0/32
+    ///
+    /// Example:
+    ///
+    ///     IPAddress.ipv4unspecifiedAddress // 0.0.0.0/32
     public static let ipv4unspecifiedAddress = IPAddress(0)
     /// Ipv6 unspecified instance
+    ///
+    /// - Returns: `IPAddress` instance representing 0:0:0:0:0:0:0:0/128
+    ///
+    /// Example:
+    ///
+    ///     IPAddress.ipv6unspecifiedAddress // 0:0:0:0:0:0:0:0/128
     public static let ipv6unspecifiedAddress = IPAddress(0, 0)
     // MARK: -
     /// A Boolean value indicating whether this ip address is an unspecified address
+    ///
+    /// - Note: Only the address part is used in evaluation (cidr value is *ignored*).
     public var isUnspecified:Bool {
         type == .v4 ? sysendianIpv4 == 0 : ipv6lhs == 0 && ipv6rhs == 0
     }
     /// A Boolean value indicating whether this ip address is a loopback address
+    ///
+    /// - Returns: `true` when address (single end point) belongs to loopback network
+    /// block or when address represents a network and the network is completely contained by
+    /// the loopback address block (ipv4).
+    ///
+    /// - Note: Only the address part is used in evaluation (cidr value is *ignored*).
     public var isLoopback:Bool {
         type == .v4 ? (2130706432...2147483647).contains(sysendianIpv4) : ipv6lhs == 0 && ipv6rhs == 1
     }
     /// A Boolean value indicating whether this ip address is a non routable broadcast address
+    ///
+    /// - Note: Only the address part is used in evaluation (cidr value is *ignored*).
     public var isBroadcast:Bool {
         return type == .v4 ?
         sysendianIpv4 == 0xffffffff
@@ -461,6 +555,14 @@ extension IPAddress {
         ipv6lhs == ~0 && ipv6rhs == ~0
     }
     /// A Boolean value indicating whether this ip address is a private address
+    ///
+    /// - Returns: `true` when address (single end point) belongs to private network
+    /// block or when address represents a network and the network is completely contained by
+    /// the private address block.
+    ///
+    /// ## SeeAlso
+    ///
+    /// [Reserved IP addresses](https://en.wikipedia.org/wiki/Reserved_IP_addresses)
     public var isPrivate:Bool {
         return type == .v4 ?
         IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
@@ -470,13 +572,21 @@ extension IPAddress {
         IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)
     }
     /// A Boolean value indicating whether this ip address is a link local address
+    ///
+    /// - Returns: `true` when address (single end point) belongs to link local network
+    /// block or when address represents a network and the network is completely contained by
+    /// the link local block.
+    ///
+    /// ## SeeAlso
+    ///
+    /// [Link local address](https://en.wikipedia.org/wiki/Link-local_address)
     public var isLinkLocal:Bool {
         return type == .v4 ?
         IPAddress(169, 254, 0, 0, cidr: 16).contains(self)
         :
         IPAddress(0xfe80000000000000, 0, cidr: 10).contains(self)
     }
-    /// A Boolean value indicating whether this ip address is a global address (routable)
+    /// A Boolean value indicating whether this ip address is a global address (routable address)
     public var isGlobal:Bool {
         self.isUnspecified == false &&
         self.isPrivate == false &&
@@ -486,13 +596,40 @@ extension IPAddress {
         self.isBroadcast == false
     }
     /// A Boolean value indicating whether this ip address is a multicast address
+    ///
+    /// - Returns: `true` when address (single end point) belongs to multicast network
+    /// block or when address represents a network and the network is completely contained by
+    /// the multicast block.
+    ///
+    /// ## SeeAlso
+    ///
+    /// [Reserved IP addresses](https://en.wikipedia.org/wiki/Reserved_IP_addresses)
+    ///
+    /// - Note: Cidr value is taken into account when evaluating this value.
     public var isMulticast:Bool {
         return type == .v4 ?
         IPAddress(224, 0, 0, 0, cidr: 4).contains(self)
         :
         IPAddress(0xff00000000000000, 0, cidr: 8).contains(self)
     }
-    /// A Boolean value indicating whether this ip address is reserved for documentation purposes
+    /// A Boolean value indicating whether this ip address belongs to a network block
+    /// which is reserved for documentation purposes
+    ///
+    /// - Returns: `true` when address (single end point) belongs to documentation network
+    /// block or when address represents a network and the network is completely contained by
+    /// the documentation block.
+    ///
+    /// Example:
+    ///
+    ///     IPAddress(192, 0, 2, 0, cidr: 25).isDocumentation // true
+    ///     IPAddress(192, 0, 1, 255).isDocumentation // false
+    ///     IPAddress(192, 0, 2, 0, cidr: 23).isDocumentation // false
+    ///
+    /// ## SeeAlso
+    ///
+    /// [Reserved IP addresses](https://en.wikipedia.org/wiki/Reserved_IP_addresses)
+    ///
+    /// - Note: Cidr value is taken into account when evaluating this value.
     public var isDocumentation:Bool {
         return type == .v4 ?
         IPAddress(192, 0, 2, 0, cidr: 24).contains(self) ||
@@ -500,6 +637,16 @@ extension IPAddress {
         IPAddress(203, 0, 113, 0, cidr: 24).contains(self)
         :
         IPAddress(0x20010db800000000, 0, cidr: 32).contains(self)
+    }
+    /// A Boolean value indicating whether this ip address is a single end point address
+    /// (single host address)
+    ///
+    /// ## SeeAlso
+    ///
+    /// More information about CIDR, see [Wikipedia article](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
+    public var isSingleEndPoint:Bool {
+        type == .v4 && cidrBits == Self.validV4CIDRRange.upperBound ||
+        type == .v6 && cidrBits == Self.validV6CIDRRange.upperBound
     }
     // MARK: -
     /// Ip address bytes in network byte order
@@ -568,7 +715,7 @@ extension IPAddress {
         }
     }
     /// Ip address Data (in network byte order)
-    public var rawAddressBytes:Data {
+    public var rawAddressData:Data {
         return Data(networkOrderedAddressBytes)
     }
     /// Underestimated host count of this address
@@ -589,17 +736,27 @@ extension IPAddress {
     // MARK: -
     /// Network address of the network this ip address belongs to
     ///
-    /// - Returns: Returns `nil` if ip address doesn't represent a network
+    /// Example:
+    ///
+    ///     let ip = IPAddress(192, 0, 2, 123, cidr: 24)
+    ///     ip.networkAddress // 192.0.2.0
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network block
     /// (is a single end point). Othervice returns network address of the network
-    ///  this ip belongs to with cidr set to the corresponding network.
+    ///  block this ip belongs to
     public var networkAddress:IPAddress? {
         return IPAddress(bytes: zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
     }
     /// Router address of the network this ip address belongs to
     ///
-    /// - Returns: Returns `nil` if ip address doesn't represent a network
-    /// (is a single end point). Othervice returns router's ip address of the network
-    /// with cidr set to the corresponding network.
+    /// Example:
+    ///
+    ///     let ip = IPAddress(192, 0, 2, 123, cidr: 24)
+    ///     ip.routerAddress // 192.0.2.1
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network block
+    /// (is a single end point). Othervice returns router's ip address of the network block
+    /// this ip address belongs to
     public var routerAddress:IPAddress? {
         switch type {
         case .v4:
@@ -622,9 +779,13 @@ extension IPAddress {
     }
     /// Broadcast address of the network this ip address belongs to
     ///
-    /// - Returns: Returns `nil` if ip address doesn't represent a network
-    /// (is a single end point). Othervice returns first ip address of the network
-    /// with cidr set to the corresponding network.
+    /// Example:
+    ///
+    ///     let ip = IPAddress(192, 0, 2, 123, cidr: 24)
+    ///     ip.broadcastAddress // 192.0.2.255
+    ///
+    /// - Returns: Returns `nil` if ip address doesn't represent a network block
+    /// (is a single end point). Othervice returns last ip address of the network block
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
@@ -673,7 +834,7 @@ extension IPAddress {
         }
         return ona >= na && oba <= ba
     }
-    /// Returns a ip address that is offset the specified distance from this ip address.
+    /// Returns an ip address that is offset the specified distance from this ip address.
     ///
     /// - Returns: When clamping is `false`, returns an ip address (with single
     ///  endpoint cidr) that is offset the specified distance from this ip address.

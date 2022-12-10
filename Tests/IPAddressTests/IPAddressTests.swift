@@ -54,7 +54,7 @@ final class IPAddressTests: XCTestCase {
             XCTAssertEqual(v4.cidrBits, 32)
             XCTAssertEqual(v4.type, .v4)
             XCTAssertEqual(v4.isLoopback, false)
-            XCTAssertEqual(v4.rawAddressBytes, Data([1, 2, 3, 4]))
+            XCTAssertEqual(v4.rawAddressData, Data([1, 2, 3, 4]))
             XCTAssertEqual(v4.networkAddress, IPAddress(1, 2, 3, 4))
             XCTAssertEqual(IPAddress(0, 0, 0, 0).isLoopback, false)
             XCTAssertEqual(IPAddress(126, 255, 255, 255).isLoopback, false)
@@ -68,7 +68,7 @@ final class IPAddressTests: XCTestCase {
             let v6 = IPAddress(1, 2, 3, 4, 5, 6, 7, 8)
             XCTAssertEqual(v6.cidrBits, 128)
             XCTAssertEqual(v6.type, .v6)
-            XCTAssertEqual(v6.rawAddressBytes, Data([0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8]), "\(v6.rawAddressBytes.withUnsafeBytes({ Array($0) }))")
+            XCTAssertEqual(v6.rawAddressData, Data([0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8]), "\(v6.rawAddressData.withUnsafeBytes({ Array($0) }))")
             XCTAssertEqual(v6.networkAddress, v6)
             XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isLoopback, false)
             XCTAssertEqual(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isLoopback, true)
@@ -159,8 +159,8 @@ final class IPAddressTests: XCTestCase {
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65))
             XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress,
                            IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65))
-            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress!.rawAddressBytes,
-                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65).rawAddressBytes)
+            XCTAssertEqual(IPAddress(0xff0a, 2, 3, 4, 5, 6, 7, 8, cidr: 65).networkAddress!.rawAddressData,
+                           IPAddress(0xff0a, 2, 3, 4, 0, 0, 0, 0, cidr: 65).rawAddressData)
         }
     }
     func test_underestimatedHostCount() {
@@ -336,6 +336,18 @@ final class IPAddressTests: XCTestCase {
             XCTAssertFalse(IPAddress(0x2001, 0xdb9, 0, 0, 0, 0, 0, 0).isDocumentation)
             XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 0).isDocumentation)
             XCTAssertFalse(IPAddress(0, 0, 0, 0, 0, 0, 0, 1).isDocumentation)
+        }
+    }
+    func test_isSingleHost() {
+        do { // v4
+            XCTAssertTrue(IPAddress(0).isSingleEndPoint)
+            XCTAssertFalse(IPAddress(0, cidr: 31).isSingleEndPoint)
+            XCTAssertFalse(IPAddress(0, cidr: 0).isSingleEndPoint)
+        }
+        do { // v6
+            XCTAssertTrue(IPAddress(0, 0).isSingleEndPoint)
+            XCTAssertFalse(IPAddress(0, 0, cidr: 127).isSingleEndPoint)
+            XCTAssertFalse(IPAddress(0, 0, cidr: 0).isSingleEndPoint)
         }
     }
     func test_routerAddress() {
@@ -650,7 +662,7 @@ final class IPAddressTests: XCTestCase {
     func test_strideable() {
         do { // v4 distance(to:)
             XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress(255, 255, 255, 255)), Int(UInt32.max))
-            XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress.ipv4localhost), 2130706432)
+            XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress.ipv4localhost), 2130706433)
         }
         do { // v6 distance(to:)
             // Below: both of the following will cause crash 
@@ -660,7 +672,7 @@ final class IPAddressTests: XCTestCase {
         do { // v4 advanced(by:)
             XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.advanced(by: Int(UInt32.max)), IPAddress(255, 255, 255, 255))
             XCTAssertEqual(IPAddress.ipv4localhost.advanced(by: -Int(UInt32.max)), IPAddress.ipv4unspecifiedAddress)
-            XCTAssertEqual(IPAddress.ipv4localhost.advanced(by: -5), IPAddress(126, 255, 255, 251))
+            XCTAssertEqual(IPAddress.ipv4localhost.advanced(by: -5), IPAddress(126, 255, 255, 252))
         }
         do { // v6 advanced(by:)
             XCTAssertEqual(IPAddress.ipv6localhost.advanced(by: 1), IPAddress(0, 2, cidr: 128))
@@ -681,7 +693,7 @@ final class IPAddressTests: XCTestCase {
                 XCTAssertEqual(iterator.next(), ip.networkAddress)
                 
                 let seqr = IPAddressSequence(range: ip...IPAddress(192, 168, 14, 3, cidr: cidr))
-                print(seqr.underestimatedCount, seqr.startAddress.debugDescription, seqr.endAddress.debugDescription, e)
+                //print(seqr.underestimatedCount, seqr.startAddress.debugDescription, seqr.endAddress.debugDescription, e)
                 XCTAssertEqual(seqr.underestimatedCount, 253)
                 var iteratorr = seqr.makeIterator()
                 XCTAssertEqual(iteratorr.next(), IPAddress(ip, cidr: IPAddress.validV4CIDRRange.upperBound))
@@ -692,28 +704,28 @@ final class IPAddressTests: XCTestCase {
             let ip = IPAddress(255, 255, 254, 0, cidr: cidr)
             let seq = IPAddressSequence(range: ip...IPAddress(255,255,255,255, cidr: cidr))
             XCTAssertEqual(seq.underestimatedCount, 512)
-            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+            //print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
         }
         do {
             let cidr = 128
             let ip = IPAddress(0xffff_ffff_ffff_ffff, 0, cidr: cidr)
             let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
             XCTAssertEqual(seq.underestimatedCount, 9223372036854775807)
-            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+            //print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
         }
         do {
             let cidr = 128
             let ip = IPAddress(0xffff_ffff_ffff_ffff, 0x8000_0000_0000_0002, cidr: cidr)
             let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
             XCTAssertEqual(seq.underestimatedCount, 9223372036854775806)
-            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+            //print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
         }
         do {
             let cidr = 128
             let ip = IPAddress(0xffff_ffff_0000_0000, 0x8000_0000_0000_0001, cidr: cidr)
             let seq = IPAddressSequence(range: ip...IPAddress(0xffff_ffff_ffff_ffff, 0xffff_ffff_ffff_ffff, cidr: cidr))
             XCTAssertEqual(seq.underestimatedCount, 9223372036854775807)
-            print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
+            //print(seq.startAddress.debugDescription, "...", seq.endAddress.debugDescription)
         }
         do {
             let expected = ["0.0.0.0/32", "0.0.0.1/32", "0.0.0.2/32", "0.0.0.3/32", "0.0.0.4/32"]
