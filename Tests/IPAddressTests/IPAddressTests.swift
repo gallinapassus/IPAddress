@@ -1568,7 +1568,7 @@ final class PerformanceTests : XCTestCase {
                       cells: cells,
                       frameStyle: .roundedPadded)
         var out = "```\n"
-        tbl.render(into: &out)
+        out += tbl.render()
         out += "```\n"
         var outfile:URL {
             var root = URL(fileURLWithPath: #file.replacingOccurrences(of: "IPAddress.swift", with: ""))
