@@ -1550,25 +1550,27 @@ final class PerformanceTests : XCTestCase {
 
         var cells:[[Txt]] = []
         let cols = [
-            Col("IPAddress API", align: .bottomLeft),
-            Col("Measured performance invocations / sec", width: 20, align: .bottomCenter),
-            Col("Test data type", width: 6, align: .bottomCenter, wrapping: .word),
-            Col("Comment", width: 24, align: .bottomCenter, wrapping: .word),
+            Col("IPAddress API", defaultAlignment: .bottomLeft),
+            Col("Measured performance invocations / sec", width: 20,
+                defaultAlignment: .bottomCenter),
+            Col("Test data type", width: 6,
+                defaultAlignment: .bottomCenter, defaultWrapping: .word),
+            Col("Comment", width: 24,
+                defaultAlignment: .bottomCenter, defaultWrapping: .word),
         ]
         
         averages.forEach { (api, addrType, comment, time, invCount) in
             let r = rate(time, iterations: invCount)
             cells.append([Txt(api),
-                          Txt(r, align: .bottomRight),
-                          Txt(addrType, align: .bottomCenter),
-                          Txt(comment, align: .topLeft)])
+                          Txt(r, alignment: .bottomRight),
+                          Txt(addrType, alignment: .bottomCenter),
+                          Txt(comment, alignment: .topLeft)])
         }
         let tbl = Tbl("Performance test summary for\n\(hwspec())",
                       columns: cols,
-                      cells: cells,
-                      frameStyle: .roundedPadded)
+                      cells: cells)
         var out = "```\n"
-        out += tbl.render()
+        out += tbl.render(style: .roundedPadded)
         out += "```\n"
         var outfile:URL {
             var root = URL(fileURLWithPath: #file.replacingOccurrences(of: "IPAddress.swift", with: ""))
