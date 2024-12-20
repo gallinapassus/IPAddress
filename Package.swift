@@ -4,7 +4,6 @@ import PackageDescription
 
 let pkg = Package(
     name: "IPAddress",
-    platforms: [ .macOS(.v10_15) ],
     products: [
         .library(
             name: "IPAddress",
