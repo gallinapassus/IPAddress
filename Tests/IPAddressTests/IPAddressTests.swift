@@ -895,31 +895,65 @@ final class IPAddressTests: XCTestCase {
         XCTAssertNil(IPAddress("::abcd", options: .noZeroSupression))
         XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSupression))
     }
-    func test_codable() {
+    func test_codable_v4() {
         do { // v4
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             let ip = IPAddress(192, 0, 2, 1, cidr: 22)
             let encodedData = try encoder.encode(ip)
-            //print(ip.debugDescription, "=>\n", String(data: encodedData, encoding: .utf8)!)
             let decoder = JSONDecoder()
             let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
-            //print(decodedIP.debugDescription)
             XCTAssertEqual(ip, decodedIP)
         } catch let e {
             var str = ""
             dump(e, to: &str)
             XCTFail(str)
         }
+    }
+    func test_codable_v6() {
         do { // v6
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
-            let ip = IPAddress(0x20010db800000000, 0, cidr: 32)
+            let ip = IPAddress(0x20010db800000000, 0, cidr: 48)
             let encodedData = try encoder.encode(ip)
-            //print(ip.compactDebugDescription, "=>\n", String(data: encodedData, encoding: .utf8)!)
             let decoder = JSONDecoder()
             let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
-            //print(decodedIP.compactDebugDescription)
+            XCTAssertEqual(ip, decodedIP)
+        } catch let e {
+            var str = ""
+            dump(e, to: &str)
+            XCTFail(str)
+        }
+    }
+    func test_codable_v4_with_user_info_bytes() {
+        do { // v4
+            let encoder = JSONEncoder()
+            let key = CodingUserInfoKey(rawValue: IPAddress.UserInfoKey.encodingSchema.rawValue)!
+            encoder.userInfo[key] = IPAddress.EncodingSchema.bytes
+            encoder.outputFormatting = .prettyPrinted
+            let ip = IPAddress(192, 0, 2, 1, cidr: 22)
+            let encodedData = try encoder.encode(ip)
+            let decoder = JSONDecoder()
+            decoder.userInfo[key] = IPAddress.EncodingSchema.bytes
+            let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
+            XCTAssertEqual(ip, decodedIP)
+        } catch let e {
+            var str = ""
+            dump(e, to: &str)
+            XCTFail(str)
+        }
+    }
+    func test_codable_v6_with_user_info() {
+        do { // v6
+            let encoder = JSONEncoder()
+            let key = CodingUserInfoKey(rawValue: IPAddress.UserInfoKey.encodingSchema.rawValue)!
+            encoder.userInfo[key] = IPAddress.EncodingSchema.bytes
+            encoder.outputFormatting = .prettyPrinted
+            let ip = IPAddress(0x20010db800000000, 0, cidr: 48)
+            let encodedData = try encoder.encode(ip)
+            let decoder = JSONDecoder()
+            decoder.userInfo[key] = IPAddress.EncodingSchema.bytes
+            let decodedIP = try decoder.decode(IPAddress.self, from: encodedData)
             XCTAssertEqual(ip, decodedIP)
         } catch let e {
             var str = ""
