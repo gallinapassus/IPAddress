@@ -1,5 +1,4 @@
 import Foundation
-import Testing
 import IPAddress
 
 @Test
