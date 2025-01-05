@@ -1,4 +1,4 @@
-// swift-tools-version: 5.5
+// swift-tools-version: 5.7
 
 import PackageDescription
 
@@ -10,8 +10,10 @@ let pkg = Package(
             targets: ["IPAddress"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/gallinapassus/Table.git",
-                 from: "0.1.0"),
+        .package(
+            url: "https://github.com/gallinapassus/Table.git",
+            from: "0.1.0"
+        )
     ],
     targets: [
         .target(name: "IPAddress"),

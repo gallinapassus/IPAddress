@@ -1,7 +1,7 @@
 import Foundation
 
 /// Conrete type capable of encapsulating ipv4 and ipv6 addresses
-public struct IPAddress : Codable {
+public struct IPAddress {
 
     /// Ip address type enumeration
     public enum IPAddrType : UInt16, Codable { case v4 = 0, v6 = 1 }
@@ -80,8 +80,7 @@ public struct IPAddress : Codable {
     /// More information about CIDR, see [Wikipedia article](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
     ///
     public let cidrBits:Int
-    /// Network mask (as bytes)
-    public let networkMask:[UInt8]
+
     @inline(__always)
     private static func genv4MaskBytes(bits:Int) -> [UInt8] {
         let lhs = UInt32.max<<(32 - bits)
@@ -179,7 +178,6 @@ public struct IPAddress : Codable {
         self.sysendianIpv4 = u32
         self.ipv6rhs = 0
         self.ipv6lhs = 0
-        self.networkMask = Self.genv4MaskBytes(bits: bits)
     }
 
     /// Initializes an ipv4 or ipv6 address
@@ -196,7 +194,6 @@ public struct IPAddress : Codable {
         switch bytes.count {
         case 4:
             let b = bits ?? Self.validV4CIDRRange.upperBound
-            self.networkMask = Self.genv4MaskBytes(bits: b)
             self.cidrBits = Self.validV4CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV4CIDRRange.upperBound
             self.type = .v4
             self.sysendianIpv4 = Self.systemIsLittleEndian ?
@@ -206,7 +203,6 @@ public struct IPAddress : Codable {
             self.ipv6lhs = 0
         case 16:
             let b = bits ?? Self.validV6CIDRRange.upperBound
-            self.networkMask = Self.genv6MaskBytes(bits: b)
             self.cidrBits = Self.validV6CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV6CIDRRange.upperBound
             self.type = .v6
             self.sysendianIpv4 = 0
@@ -747,6 +743,14 @@ extension IPAddress {
     public var networkAddress:IPAddress? {
         return IPAddress(bytes: zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
     }
+    /// Network mask (as bytes)
+    public var networkMask:[UInt8] {
+        if type == .v4 {
+            return Self.genv4MaskBytes(bits: cidrBits)
+        }
+        return Self.genv6MaskBytes(bits: cidrBits)
+    }
+
     /// Router address of the network this ip address belongs to
     ///
     /// Example:
@@ -909,7 +913,6 @@ extension IPAddress {
         self.sysendianIpv4 = 0
         self.ipv6lhs = lhs
         self.ipv6rhs = rhs
-        self.networkMask = Self.genv6MaskBytes(bits: bits)
     }
     /// Initializes an ipv4 address
     ///
@@ -927,7 +930,6 @@ extension IPAddress {
         UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
         self.ipv6rhs = 0
         self.ipv6lhs = 0
-        self.networkMask = Self.genv4MaskBytes(bits: bits)
     }
     /// Initializes an ipv6 address
     ///
@@ -936,7 +938,6 @@ extension IPAddress {
     ///     IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1) // 2001:db8::1/128
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
         self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
-        self.networkMask = Self.genv6MaskBytes(bits: bits)
         if Self.systemIsLittleEndian {
             self.ipv6rhs =
             UInt64(h) | UInt64(g)<<16 |
@@ -1186,5 +1187,187 @@ public struct IPAddressSequence: Sequence {
             }
         }
         return Int.max
+    }
+}
+// MARK: -
+extension IPAddress : Codable {
+
+    private enum CodingKeys : String, CodingKey {
+        case address, cidr
+    }
+
+    public enum EncodingSchema : String {
+        case bytes
+        case string
+        case `default`
+    }
+
+    public enum UserInfoKey : String {
+        case encodingSchema
+        var key: CodingUserInfoKey {
+            CodingUserInfoKey(rawValue: rawValue)!
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        guard let key = CodingUserInfoKey(
+            rawValue: UserInfoKey.encodingSchema.rawValue
+        ) else {
+            let ctx = EncodingError.Context(
+                codingPath: encoder.codingPath,
+                debugDescription: "Failed to create CodingUserInfoKey from \(UserInfoKey.encodingSchema)"
+            )
+            throw EncodingError.invalidValue(UserInfoKey.encodingSchema, ctx)
+        }
+        let schema = encoder.userInfo[key, default: EncodingSchema.default] as? EncodingSchema ?? .default
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch type {
+
+        case .v4:
+            switch schema {
+            case .bytes:
+                let addressBits = [
+                    UInt8((sysendianIpv4 & 0xff000000)>>24),
+                    UInt8((sysendianIpv4 & 0x00ff0000)>>16),
+                    UInt8((sysendianIpv4 & 0x0000ff00)>>8),
+                    UInt8((sysendianIpv4 & 0x000000ff)),
+                ]
+                try container.encode(addressBits, forKey: .address)
+            case .string, .default:
+                try container.encode(description, forKey: .address)
+            }
+
+        case .v6:
+            switch schema {
+            case .bytes:
+                let addressBits = [
+                    UInt16((ipv6lhs & 0xffff000000000000) >> 48),
+                    UInt16((ipv6lhs & 0x0000ffff00000000) >> 32),
+                    UInt16((ipv6lhs & 0x00000000ffff0000) >> 16),
+                    UInt16((ipv6lhs & 0x000000000000ffff)),
+                    UInt16((ipv6rhs & 0xffff000000000000) >> 48),
+                    UInt16((ipv6rhs & 0x0000ffff00000000) >> 32),
+                    UInt16((ipv6rhs & 0x00000000ffff0000) >> 16),
+                    UInt16((ipv6rhs & 0x000000000000ffff)),
+                ]
+                try container.encode(addressBits, forKey: .address)
+            case .string, .default:
+                try container.encode(description, forKey: .address)
+            }
+        }
+        try container.encode(cidrBits, forKey: .cidr)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        guard let key = CodingUserInfoKey(
+            rawValue: UserInfoKey.encodingSchema.rawValue
+        ) else {
+            let ctx = DecodingError.Context(
+                codingPath: decoder.codingPath,
+                debugDescription: "Failed to create CodingUserInfoKey from \(UserInfoKey.encodingSchema)"
+            )
+            throw DecodingError.typeMismatch(UserInfoKey.self, ctx)
+        }
+        let schema = decoder.userInfo[key, default: EncodingSchema.default] as? EncodingSchema ?? .default
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let errorMessage = "Invalid IPv4 address. IP address must contain exactly 4 UInt8 elements (for IPv4 address) or 8 UInt16 elements (for IPv6 address). Bytes are expected in little-endian order."
+        let cidr = try container.decodeIfPresent(Int.self, forKey: .cidr) ?? 0
+
+        switch schema {
+
+        case .bytes:
+            let bytes = try container.decode([UInt16].self, forKey: .address)
+            switch bytes.count {
+            case 4:
+                guard bytes.allSatisfy({ $0 <= UInt8.max }) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .address,
+                        in: container,
+                        debugDescription: errorMessage
+                    )
+                }
+                try Self.validate(cidrBits: cidr, for: IPAddrType.v4, container: container)
+                self = IPAddress(bytes: bytes.map({ UInt8($0) }), cidr: cidr)!
+
+            case 8:
+                try Self.validate(cidrBits: cidr, for: IPAddrType.v6, container: container)
+                let u8bytes:[UInt8] = [
+                    UInt8((bytes[0] & 0xff00) >> 8),
+                    UInt8(bytes[0] & 0x00ff),
+                    UInt8((bytes[1] & 0xff00) >> 8),
+                    UInt8(bytes[1] & 0x00ff),
+                    UInt8((bytes[2] & 0xff00) >> 8),
+                    UInt8(bytes[2] & 0x00ff),
+                    UInt8((bytes[3] & 0xff00) >> 8),
+                    UInt8(bytes[3] & 0x00ff),
+                    UInt8((bytes[4] & 0xff00) >> 8),
+                    UInt8(bytes[4] & 0x00ff),
+                    UInt8((bytes[5] & 0xff00) >> 8),
+                    UInt8(bytes[5] & 0x00ff),
+                    UInt8((bytes[6] & 0xff00) >> 8),
+                    UInt8(bytes[6] & 0x00ff),
+                    UInt8((bytes[7] & 0xff00) >> 8),
+                    UInt8(bytes[7] & 0x00ff),
+                ]
+                self = IPAddress(bytes: u8bytes, cidr: cidr)!
+
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .address,
+                    in: container,
+                    debugDescription: errorMessage
+                )
+            }
+
+        case.string, .default:
+            let addressString = try container.decode(String.self, forKey: .address)
+            guard let ip = IPAddress(addressString) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .address,
+                    in: container,
+                    debugDescription: "Invalid IP address \(addressString)."
+                )
+            }
+            let cidr = try container.decodeIfPresent(Int.self, forKey: .cidr) ?? 0
+            let cidrMax = ip.type == .v4 ? 32 : 128
+            let validRange = (0...cidrMax)
+            guard validRange.contains(cidr) else {
+                let msg = "Invalid CIDR value \(cidr). Valid CIDRs are in the range \(validRange)"
+                throw DecodingError.dataCorruptedError(
+                    forKey: .cidr,
+                    in: container,
+                    debugDescription: msg
+                )
+            }
+            self.cidrBits = cidr
+            self.type = ip.type
+
+            switch ip.type {
+
+            case .v4:
+                self.sysendianIpv4 = ip.sysendianIpv4
+                self.ipv6lhs = ip.ipv6lhs
+                self.ipv6rhs = ip.ipv6rhs
+
+            case .v6:
+                self.sysendianIpv4 = ip.sysendianIpv4
+                self.ipv6lhs = ip.ipv6lhs
+                self.ipv6rhs = ip.ipv6rhs
+            }
+        }
+    }
+
+    private static func validate(cidrBits: Int, for type: IPAddrType, container: KeyedDecodingContainer<IPAddress.CodingKeys>) throws {
+        let cidrMax = type == .v4 ? Self.validV4CIDRRange.upperBound : Self.validV6CIDRRange.upperBound
+        let validRange = (0...cidrMax)
+        guard validRange.contains(cidrBits) else {
+            let msg = "Invalid CIDR value \(cidrBits). Valid CIDRs are in the range \(validRange)"
+            throw DecodingError.dataCorruptedError(
+                forKey: .cidr,
+                in: container,
+                debugDescription: msg
+            )
+        }
     }
 }
