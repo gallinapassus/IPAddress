@@ -1628,6 +1628,10 @@ final class PerformanceTests : XCTestCase {
             
             A type providing sequential, iterated access to `IPAddress` elements.
             
+            # IPAddressAndPort
+            
+            A concrete type for storing IPAddress, port and (transport layer) ip-protocol (tcp or udp).
+
             # Reference performance
             
             """
