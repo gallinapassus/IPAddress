@@ -1,10 +1,10 @@
-public struct IPAddressAndPort : Codable {
+public struct IPAddressAndPort : Codable, Sendable {
 
     public enum IPAddressAndPortError : Error {
         case msg(String)
     }
 
-    public enum IPProtocol : String, Codable { case tcp, udp }
+    public enum IPProtocol : String, Codable, Sendable { case tcp, udp }
     public let ip:IPAddress
     public let port:UInt16
     public let ipProtocol:IPProtocol
