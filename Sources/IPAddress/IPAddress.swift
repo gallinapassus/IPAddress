@@ -1,6 +1,6 @@
 import Foundation
 
-/// Conrete type capable of encapsulating ipv4 and ipv6 addresses
+/// Concrete type capable of encapsulating ipv4 and ipv6 addresses
 public struct IPAddress : Sendable {
 
     /// Ip address type enumeration
@@ -12,7 +12,7 @@ public struct IPAddress : Sendable {
         public init(rawValue:Int) {
             self.rawValue = rawValue
         }
-        /// Don't aallow leading zeroes on ipv6 addresses
+        /// Don't allow leading zeroes on ipv6 addresses
         ///
         /// Example
         ///
@@ -898,7 +898,7 @@ extension IPAddress {
     }
     /// Underestimated host count of this address
     ///
-    /// - Returns: Understimated host count of the network
+    /// - Returns: Underestimated host count of the network
     ///
     /// - Note: Returns correct host count for all ipv4 cidr values.
     /// Returns Int.max for ipv6 addresses with cidr value smaller than 66.
@@ -920,7 +920,7 @@ extension IPAddress {
     ///     ip.networkAddress // 192.0.2.0
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network block
-    /// (is a single end point). Othervice returns network address of the network
+    /// (is a single end point). Otherwise returns network address of the network
     ///  block this ip belongs to
     public var networkAddress:IPAddress? {
         return IPAddress(bytes: zip(networkOrderedAddressBytes, networkMask).map({ $0 & $1 }), cidr: cidrBits)
@@ -941,7 +941,7 @@ extension IPAddress {
     ///     ip.routerAddress // 192.0.2.1
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network block
-    /// (is a single end point). Othervice returns router's ip address of the network block
+    /// (is a single end point). Otherwise returns router's ip address of the network block
     /// this ip address belongs to
     public var routerAddress:IPAddress? {
         switch type {
@@ -971,7 +971,7 @@ extension IPAddress {
     ///     ip.broadcastAddress // 192.0.2.255
     ///
     /// - Returns: Returns `nil` if ip address doesn't represent a network block
-    /// (is a single end point). Othervice returns last ip address of the network block
+    /// (is a single end point). Otherwise returns last ip address of the network block
     public var broadcastAddress:IPAddress? {
         switch type {
         case .v4:
@@ -989,7 +989,7 @@ extension IPAddress {
         }
     }
     // MARK: -
-    /// A boolean value indicating wheter this ip address instance contains the other ip address entirely
+    /// A boolean value indicating whether this ip address instance contains the other ip address entirely
     ///
     /// Examples:
     ///
@@ -1027,7 +1027,7 @@ extension IPAddress {
     ///  Returns `nil` if offset overflows the ip's addressable range.
     ///  When clamping is `true`, returns an ip address (with same cidr as original
     ///  ip address) that is offset the specified distance from this ip address
-    ///  or `nil`if offset overflows the original ip addresse's network range.
+    ///  or `nil`if offset overflows the original ip address's network range.
     ///
     /// Example
     ///
@@ -1166,7 +1166,7 @@ extension IPAddress {
             self.init(other.ipv6lhs, other.ipv6rhs, cidr: bits ?? Self.validV6CIDRRange.upperBound)
         }
     }
-    /// A boolean value indicating wheter current system is little endian
+    /// A boolean value indicating whether current system is little endian
     private static var systemIsLittleEndian:Bool {
         UInt16(256) & 0x00ff == 0
     }
@@ -1207,7 +1207,7 @@ extension IPAddress : Strideable {
 ///         print(ip.debugDescription) // 192.168.5.16/30, 192.168.5.17/30, 192.168.5.18/30, 192.168.5.19/30
 ///     }
 ///
-/// Example: Iterate over the whole ipv4 adressable range
+/// Example: Iterate over the whole ipv4 addressable range
 ///
 ///     var iterator = IPAddressIterator(address: IPAddress(0, 0, 0, 0))
 ///     while let ip = iterator.next() {
@@ -1256,7 +1256,7 @@ public struct IPAddressIterator : IteratorProtocol, Sendable {
     ///         print(ip.debugDescription) // 192.168.5.16/30, 192.168.5.17/30, 192.168.5.18/30, 192.168.5.19/30
     ///     }
     ///
-    /// Example: Iterate over the whole ipv4 adressable range
+    /// Example: Iterate over the whole ipv4 addressable range
     ///
     ///     var iterator = IPAddressIterator(range: IPAddress(0, 0, 0, 0)...IPAddress(255, 255, 255, 255))
     ///     while let ip = iterator.next() {

@@ -111,7 +111,7 @@ internal func parser(_ str:String, options:IPAddress.ParsingOptions = IPAddress.
             }
             // Check that the ipv4 segment value is 0-255
             guard u16 < 256 else {
-                // ipv4 segement overflow
+                // ipv4 segment overflow
                 return nil
             }
             // Increment the consecutive separator counter
