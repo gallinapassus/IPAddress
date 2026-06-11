@@ -22,8 +22,8 @@ public struct IPAddress : Sendable {
         ///
         /// Example
         ///
-        ///     IPAddress("ffff::", options: .noZeroSupression) // nil
-        public static let noZeroSupression = ParsingOptions(rawValue: 1 << Opts.noZeroSupression.rawValue)
+        ///     IPAddress("ffff::", options: .noZeroSuppression) // nil
+        public static let noZeroSuppression = ParsingOptions(rawValue: 1 << Opts.noZeroSuppression.rawValue)
         /// Don't allow uppercase letters in ipv6 addresses
         ///
         /// Example
@@ -45,7 +45,7 @@ public struct IPAddress : Sendable {
 
         enum Opts : Int, CaseIterable, Sendable {
             case noLeadingZeros
-            case noZeroSupression
+            case noZeroSuppression
             case noUppercase
             case ipv4Only
             case ipv6Only
@@ -744,7 +744,7 @@ extension IPAddress {
     public var isPrivate:Bool {
         return type == .v4 ?
         IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
-        IPAddress(172, 168, 0, 0, cidr: 12).contains(self) ||
+        IPAddress(172, 16, 0, 0, cidr: 12).contains(self) ||
         IPAddress(10, 0, 0, 0, cidr: 8).contains(self)
         :
         IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)

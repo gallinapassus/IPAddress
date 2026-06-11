@@ -61,7 +61,7 @@ internal func parser(_ str:String, options:IPAddress.ParsingOptions = IPAddress.
                 guard (bm & maskInsertionPoint) == maskInsertionPoint else {
                     return nil // Yes, this is now a subsequent '::', only one '::' is allowed
                 }
-                if options.contains(.noZeroSupression) {
+                if options.contains(.noZeroSuppression) {
                     // zero suppression not allowed
                     return nil
                 }

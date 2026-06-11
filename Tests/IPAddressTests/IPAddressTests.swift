@@ -259,11 +259,11 @@ final class IPAddressTests: XCTestCase {
             XCTAssertFalse(IPAddress(192, 167, 255, 255).isPrivate)
             XCTAssertFalse(IPAddress(192, 169, 0, 9).isPrivate)
 
-            XCTAssertTrue(IPAddress(172, 168, 0, 0, cidr: 12).isPrivate)
-            XCTAssertTrue(IPAddress(172, 160, 0, 0).isPrivate)
-            XCTAssertTrue(IPAddress(172, 175, 0, 0).isPrivate)
-            XCTAssertFalse(IPAddress(172, 159, 255, 255).isPrivate)
-            XCTAssertFalse(IPAddress(172, 176, 0, 0).isPrivate)
+            XCTAssertTrue(IPAddress(172, 16, 0, 0, cidr: 12).isPrivate)
+            XCTAssertTrue(IPAddress(172, 16, 0, 0).isPrivate)
+            XCTAssertTrue(IPAddress(172, 31, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(172, 15, 255, 255).isPrivate)
+            XCTAssertFalse(IPAddress(172, 32, 0, 0).isPrivate)
 
             XCTAssertTrue(IPAddress(10, 0, 0, 0, cidr: 8).isPrivate)
             XCTAssertTrue(IPAddress(10, 0, 0, 0).isPrivate)
@@ -891,9 +891,9 @@ final class IPAddressTests: XCTestCase {
         XCTAssertNil(IPAddress("0123::", options: .noLeadingZeros))
         XCTAssertEqual(IPAddress("010.1.1.1")?.compactDescription, "10.1.1.1") // default is to accept leading zeros
 
-        XCTAssertNil(IPAddress("abcd::", options: .noZeroSupression))
-        XCTAssertNil(IPAddress("::abcd", options: .noZeroSupression))
-        XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSupression))
+        XCTAssertNil(IPAddress("abcd::", options: .noZeroSuppression))
+        XCTAssertNil(IPAddress("::abcd", options: .noZeroSuppression))
+        XCTAssertNil(IPAddress("beef::abcd", options: .noZeroSuppression))
     }
     func test_codable_v4() {
         do { // v4
