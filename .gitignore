@@ -48,6 +48,12 @@ Package.resolved
 
 .build/
 
+# Performance reference results
+#
+# Generated locally by running the performance test (see README). Tracked here
+# so that committing a result is a deliberate action: `git add -f performance/<file>`.
+performance/
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However
