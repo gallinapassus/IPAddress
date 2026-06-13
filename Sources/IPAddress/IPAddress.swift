@@ -84,22 +84,12 @@ public struct IPAddress : Sendable {
     @inline(__always)
     private static func genv4MaskBytes(bits:Int) -> [UInt8] {
         let lhs = UInt32.max<<(32 - bits)
-        if Self.systemIsLittleEndian {
-            return [
-                UInt8((lhs & 0xff000000)>>24),
-                UInt8((lhs & 0x00ff0000)>>16),
-                UInt8((lhs & 0x0000ff00)>>8),
-                UInt8((lhs & 0x000000ff)),
-            ]
-        }
-        else {
-            return [
-                UInt8((lhs & 0x000000ff)),
-                UInt8((lhs & 0x0000ff00)>>8),
-                UInt8((lhs & 0x00ff0000)>>16),
-                UInt8((lhs & 0xff000000)>>24),
-            ]
-        }
+        return [
+            UInt8((lhs & 0xff000000)>>24),
+            UInt8((lhs & 0x00ff0000)>>16),
+            UInt8((lhs & 0x0000ff00)>>8),
+            UInt8((lhs & 0x000000ff)),
+        ]
     }
     @inline(__always)
     private static func genv6MaskBytes(bits:Int) -> [UInt8] {
@@ -113,49 +103,25 @@ public struct IPAddress : Sendable {
         else {
             rhs = rhs << f
         }
-        let returnValue:[UInt8]
-        if Self.systemIsLittleEndian {
-            returnValue =  [
-                UInt8((lhs & 0xff00000000000000)>>56),
-                UInt8((lhs & 0x00ff000000000000)>>48),
-                UInt8((lhs & 0x0000ff0000000000)>>40),
-                UInt8((lhs & 0x000000ff00000000)>>32),
-                UInt8((lhs & 0x00000000ff000000)>>24),
-                UInt8((lhs & 0x0000000000ff0000)>>16),
-                UInt8((lhs & 0x000000000000ff00)>>8 ),
-                UInt8((lhs & 0x00000000000000ff)),
-                
-                UInt8((rhs & 0xff00000000000000)>>56),
-                UInt8((rhs & 0x00ff000000000000)>>48),
-                UInt8((rhs & 0x0000ff0000000000)>>40),
-                UInt8((rhs & 0x000000ff00000000)>>32),
-                UInt8((rhs & 0x00000000ff000000)>>24),
-                UInt8((rhs & 0x0000000000ff0000)>>16),
-                UInt8((rhs & 0x000000000000ff00)>>8 ),
-                UInt8(rhs & 0x00000000000000ff),
-            ]
-        }
-        else {
-            returnValue =  [
-                UInt8((lhs & 0x00000000000000ff)),
-                UInt8((lhs & 0x000000000000ff00)>>8 ),
-                UInt8((lhs & 0x0000000000ff0000)>>16),
-                UInt8((lhs & 0x00000000ff000000)>>24),
-                UInt8((lhs & 0x000000ff00000000)>>32),
-                UInt8((lhs & 0x0000ff0000000000)>>40),
-                UInt8((lhs & 0x00ff000000000000)>>48),
-                UInt8((lhs & 0xff00000000000000)>>56),
-                
-                UInt8(rhs & 0x00000000000000ff),
-                UInt8((rhs & 0x000000000000ff00)>>8 ),
-                UInt8((rhs & 0x0000000000ff0000)>>16),
-                UInt8((rhs & 0x00000000ff000000)>>24),
-                UInt8((rhs & 0x000000ff00000000)>>32),
-                UInt8((rhs & 0x0000ff0000000000)>>40),
-                UInt8((rhs & 0x00ff000000000000)>>48),
-                UInt8((rhs & 0xff00000000000000)>>56),
-            ]
-        }
+        let returnValue:[UInt8] =  [
+            UInt8((lhs & 0xff00000000000000)>>56),
+            UInt8((lhs & 0x00ff000000000000)>>48),
+            UInt8((lhs & 0x0000ff0000000000)>>40),
+            UInt8((lhs & 0x000000ff00000000)>>32),
+            UInt8((lhs & 0x00000000ff000000)>>24),
+            UInt8((lhs & 0x0000000000ff0000)>>16),
+            UInt8((lhs & 0x000000000000ff00)>>8 ),
+            UInt8((lhs & 0x00000000000000ff)),
+
+            UInt8((rhs & 0xff00000000000000)>>56),
+            UInt8((rhs & 0x00ff000000000000)>>48),
+            UInt8((rhs & 0x0000ff0000000000)>>40),
+            UInt8((rhs & 0x000000ff00000000)>>32),
+            UInt8((rhs & 0x00000000ff000000)>>24),
+            UInt8((rhs & 0x0000000000ff0000)>>16),
+            UInt8((rhs & 0x000000000000ff00)>>8 ),
+            UInt8(rhs & 0x00000000000000ff),
+        ]
         return returnValue
     }
     /// Returns an enumeration value describing the contained ip address type
@@ -196,9 +162,7 @@ public struct IPAddress : Sendable {
             let b = bits ?? Self.validV4CIDRRange.upperBound
             self.cidrBits = Self.validV4CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV4CIDRRange.upperBound
             self.type = .v4
-            self.sysendianIpv4 = Self.systemIsLittleEndian ?
-            UInt32(bytes[3]) | UInt32(bytes[2])<<8 | UInt32(bytes[1])<<16 | UInt32(bytes[0])<<24 :
-            UInt32(bytes[0]) | UInt32(bytes[1])<<8 | UInt32(bytes[2])<<16 | UInt32(bytes[3])<<24
+            self.sysendianIpv4 = UInt32(bytes[3]) | UInt32(bytes[2])<<8 | UInt32(bytes[1])<<16 | UInt32(bytes[0])<<24
             self.ipv6rhs = 0
             self.ipv6lhs = 0
         case 16:
@@ -206,21 +170,12 @@ public struct IPAddress : Sendable {
             self.cidrBits = Self.validV6CIDRRange.contains(b) ? b : b < 0 ? 0 : Self.validV6CIDRRange.upperBound
             self.type = .v6
             self.sysendianIpv4 = 0
-            if Self.systemIsLittleEndian {
-                self.ipv6lhs =
-                UInt64(bytes[7])     | UInt64(bytes[6])<<8  | UInt64(bytes[5])<<16 | UInt64(bytes[4])<<24 |
-                UInt64(bytes[3])<<32 | UInt64(bytes[2])<<40 | UInt64(bytes[1])<<48 | UInt64(bytes[0])<<56
-                self.ipv6rhs =
-                UInt64(bytes[15])     | UInt64(bytes[14])<<8  | UInt64(bytes[13])<<16 | UInt64(bytes[12])<<24 |
-                UInt64(bytes[11])<<32 | UInt64(bytes[10])<<40 | UInt64(bytes[9])<<48  | UInt64(bytes[8])<<56
-            } else {
-                self.ipv6lhs =
-                UInt64(bytes[0])     | UInt64(bytes[1])<<8  | UInt64(bytes[2])<<16 | UInt64(bytes[3])<<24 |
-                UInt64(bytes[4])<<32 | UInt64(bytes[5])<<40 | UInt64(bytes[6])<<48 | UInt64(bytes[7])<<56
-                self.ipv6rhs =
-                UInt64(bytes[8])      | UInt64(bytes[9])<<8   | UInt64(bytes[10])<<16 | UInt64(bytes[11])<<24 |
-                UInt64(bytes[12])<<32 | UInt64(bytes[13])<<40 | UInt64(bytes[14])<<48 | UInt64(bytes[15])<<56
-            }
+            self.ipv6lhs =
+            UInt64(bytes[7])     | UInt64(bytes[6])<<8  | UInt64(bytes[5])<<16 | UInt64(bytes[4])<<24 |
+            UInt64(bytes[3])<<32 | UInt64(bytes[2])<<40 | UInt64(bytes[1])<<48 | UInt64(bytes[0])<<56
+            self.ipv6rhs =
+            UInt64(bytes[15])     | UInt64(bytes[14])<<8  | UInt64(bytes[13])<<16 | UInt64(bytes[12])<<24 |
+            UInt64(bytes[11])<<32 | UInt64(bytes[10])<<40 | UInt64(bytes[9])<<48  | UInt64(bytes[8])<<56
         default: return nil
         }
     }
@@ -321,49 +276,20 @@ extension IPAddress : CustomStringConvertible, CustomDebugStringConvertible {
     public var description: String {
         switch type {
         case .v4:
-            let str:String
-            if Self.systemIsLittleEndian {
-                str =
-                UInt8((sysendianIpv4 & 0xff000000)>>24).description + "." +
-                UInt8((sysendianIpv4 & 0x00ff0000)>>16).description + "." +
-                UInt8((sysendianIpv4 & 0x0000ff00)>>8).description + "." +
-                UInt8((sysendianIpv4 & 0x000000ff)).description
-            }
-            else {
-                str =
-                UInt8((sysendianIpv4 & 0x000000ff)).description + "." +
-                UInt8((sysendianIpv4 & 0x0000ff00)>>8).description + "." +
-                UInt8((sysendianIpv4 & 0x00ff0000)>>16).description + "." +
-                UInt8((sysendianIpv4 & 0xff000000)>>24).description
-            }
-            return str
+            return UInt8((sysendianIpv4 & 0xff000000)>>24).description + "."
+            + UInt8((sysendianIpv4 & 0x00ff0000)>>16).description + "."
+            + UInt8((sysendianIpv4 & 0x0000ff00)>>8).description + "."
+            + UInt8((sysendianIpv4 & 0x000000ff)).description
         case .v6:
-            let str:String
-            if Self.systemIsLittleEndian {
-                str =
-                String(UInt16(((ipv6lhs & 0xffff000000000000)>>48)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x000000000000ffff)<<0)), radix: 16) + ":" +
-                
-                String(UInt16(((ipv6rhs & 0xffff000000000000)>>48)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x000000000000ffff)<<0)), radix: 16)
-            }
-            else {
-                str =
-                String(UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)), radix: 16) + ":" +
-                String(UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)), radix: 16) + ":" +
-                
-                String(UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)), radix: 16) + ":" +
-                String(UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)), radix: 16)
-            }
-            return str
+            return String(UInt16(((ipv6lhs & 0xffff000000000000)>>48)), radix: 16) + ":"
+            + String(UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)), radix: 16) + ":"
+            + String(UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)), radix: 16) + ":"
+            + String(UInt16(((ipv6lhs & 0x000000000000ffff)<<0)), radix: 16) + ":"
+
+            + String(UInt16(((ipv6rhs & 0xffff000000000000)>>48)), radix: 16) + ":"
+            + String(UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)), radix: 16) + ":"
+            + String(UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)), radix: 16) + ":"
+            + String(UInt16(((ipv6rhs & 0x000000000000ffff)<<0)), radix: 16)
         }
     }
     /// Compact description of the ip address
@@ -383,33 +309,17 @@ extension IPAddress : CustomStringConvertible, CustomDebugStringConvertible {
         guard type == .v6 else {
             return description
         }
-        let uint16bytes:[UInt16]
-        if Self.systemIsLittleEndian {
-            uint16bytes = [
-                UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
-                UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
-                UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
-                UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
-                
-                UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
-                UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
-                UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
-                UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
-            ]
-        }
-        else {
-            uint16bytes = [
-                UInt16(((ipv6lhs & 0x00000000000000ff)<<8)  | ((ipv6lhs & 0x000000000000ff00)>>8)),
-                UInt16(((ipv6lhs & 0x0000000000ff0000)>>8)  | ((ipv6lhs & 0x00000000ff000000)>>24)),
-                UInt16(((ipv6lhs & 0x000000ff00000000)>>16) | ((ipv6lhs & 0x0000ff0000000000)>>40)),
-                UInt16(((ipv6lhs & 0x00ff000000000000)>>40) | ((ipv6lhs & 0xff00000000000000)>>56)),
-                
-                UInt16(((ipv6rhs & 0x00000000000000ff)<<8)  | ((ipv6rhs & 0x000000000000ff00)>>8)),
-                UInt16(((ipv6rhs & 0x0000000000ff0000)>>8)  | ((ipv6rhs & 0x00000000ff000000)>>24)),
-                UInt16(((ipv6rhs & 0x000000ff00000000)>>16) | ((ipv6rhs & 0x0000ff0000000000)>>40)),
-                UInt16(((ipv6rhs & 0x00ff000000000000)>>40) | ((ipv6rhs & 0xff00000000000000)>>56)),
-            ]
-        }
+        let uint16bytes:[UInt16] = [
+        UInt16(((ipv6lhs & 0xffff000000000000)>>48)),
+        UInt16(((ipv6lhs & 0x0000ffff00000000)>>32)),
+        UInt16(((ipv6lhs & 0x00000000ffff0000)>>16)),
+        UInt16(((ipv6lhs & 0x000000000000ffff)<<0)),
+
+        UInt16(((ipv6rhs & 0xffff000000000000)>>48)),
+        UInt16(((ipv6rhs & 0x0000ffff00000000)>>32)),
+        UInt16(((ipv6rhs & 0x00000000ffff0000)>>16)),
+        UInt16(((ipv6rhs & 0x000000000000ffff)<<0)),
+        ]
         guard var s = uint16bytes.firstIndex(of: 0) else {
             return "\(description)"
         }
@@ -438,10 +348,10 @@ extension IPAddress : CustomStringConvertible, CustomDebugStringConvertible {
         let a = pairs[longestZeroStrikeAt]
         
         let h = uint16bytes[..<a.startIndex].map({
-            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+            String($0, radix: 16)
         }).joined(separator: ":") + ":"
         let t = ":" + uint16bytes[a.endIndex...].map({
-            String(Self.systemIsLittleEndian ? $0 : $0.byteSwapped, radix: 16)
+            String($0, radix: 16)
         }).joined(separator: ":")
         
         return h + t
@@ -615,7 +525,7 @@ extension IPAddress : Codable {
                 throw DecodingError.dataCorruptedError(
                     forKey: .address,
                     in: container,
-                    debugDescription: "Invalid IP address \(addressString)."
+                    debugDescription: "Invalid IP address '\(addressString)'."
                 )
             }
             let cidr = try container.decodeIfPresent(Int.self, forKey: .cidr) ?? 0
@@ -741,13 +651,14 @@ extension IPAddress {
     /// ## SeeAlso
     ///
     /// [Reserved IP addresses](https://en.wikipedia.org/wiki/Reserved_IP_addresses)
+    /// [Unique Local Address](https://en.wikipedia.org/wiki/Unique_local_address)
     public var isPrivate:Bool {
         return type == .v4 ?
         IPAddress(192, 168, 0, 0, cidr: 16).contains(self) ||
         IPAddress(172, 16, 0, 0, cidr: 12).contains(self) ||
         IPAddress(10, 0, 0, 0, cidr: 8).contains(self)
         :
-        IPAddress(0xfd00000000000000, 0, cidr: 8).contains(self)
+        IPAddress(0xfc00000000000000, 0, cidr: 7).contains(self)
     }
     /// A Boolean value indicating whether this ip address is a link local address
     ///
@@ -831,65 +742,32 @@ extension IPAddress {
     public var networkOrderedAddressBytes:[UInt8] {
         switch type {
         case .v4:
-            if Self.systemIsLittleEndian {
-                return [
-                    UInt8((sysendianIpv4 & 0xff000000)>>24),
-                    UInt8((sysendianIpv4 & 0x00ff0000)>>16),
-                    UInt8((sysendianIpv4 & 0x0000ff00)>>8),
-                    UInt8(sysendianIpv4  & 0x000000ff)
-                ]
-            }
-            else {
-                return [
-                    UInt8(sysendianIpv4  & 0x000000ff),
-                    UInt8((sysendianIpv4 & 0x0000ff00)>>8),
-                    UInt8((sysendianIpv4 & 0x00ff0000)>>16),
-                    UInt8((sysendianIpv4 & 0xff000000)>>24)
-                ]
-            }
+            return [
+                UInt8((sysendianIpv4 & 0xff000000)>>24),
+                UInt8((sysendianIpv4 & 0x00ff0000)>>16),
+                UInt8((sysendianIpv4 & 0x0000ff00)>>8),
+                UInt8(sysendianIpv4  & 0x000000ff)
+            ]
         case .v6:
-            if Self.systemIsLittleEndian {
-                return [
-                    UInt8((ipv6lhs & 0xff00000000000000)>>56),
-                    UInt8((ipv6lhs & 0x00ff000000000000)>>48),
-                    UInt8((ipv6lhs & 0x0000ff0000000000)>>40),
-                    UInt8((ipv6lhs & 0x000000ff00000000)>>32),
-                    UInt8((ipv6lhs & 0x00000000ff000000)>>24),
-                    UInt8((ipv6lhs & 0x0000000000ff0000)>>16),
-                    UInt8((ipv6lhs & 0x000000000000ff00)>>8),
-                    UInt8((ipv6lhs & 0x00000000000000ff)>>0),
+            return [
+                UInt8((ipv6lhs & 0xff00000000000000)>>56),
+                UInt8((ipv6lhs & 0x00ff000000000000)>>48),
+                UInt8((ipv6lhs & 0x0000ff0000000000)>>40),
+                UInt8((ipv6lhs & 0x000000ff00000000)>>32),
+                UInt8((ipv6lhs & 0x00000000ff000000)>>24),
+                UInt8((ipv6lhs & 0x0000000000ff0000)>>16),
+                UInt8((ipv6lhs & 0x000000000000ff00)>>8),
+                UInt8((ipv6lhs & 0x00000000000000ff)>>0),
 
-                    UInt8((ipv6rhs & 0xff00000000000000)>>56),
-                    UInt8((ipv6rhs & 0x00ff000000000000)>>48),
-                    UInt8((ipv6rhs & 0x0000ff0000000000)>>40),
-                    UInt8((ipv6rhs & 0x000000ff00000000)>>32),
-                    UInt8((ipv6rhs & 0x00000000ff000000)>>24),
-                    UInt8((ipv6rhs & 0x0000000000ff0000)>>16),
-                    UInt8((ipv6rhs & 0x000000000000ff00)>>8),
-                    UInt8((ipv6rhs & 0x00000000000000ff)>>0)
-                ]
-            }
-            else {
-                return [
-                    UInt8((ipv6lhs & 0x00000000000000ff)),
-                    UInt8((ipv6lhs & 0x000000000000ff00)>>8),
-                    UInt8((ipv6lhs & 0x0000000000ff0000)>>16),
-                    UInt8((ipv6lhs & 0x00000000ff000000)>>24),
-                    UInt8((ipv6lhs & 0x000000ff00000000)>>32),
-                    UInt8((ipv6lhs & 0x0000ff0000000000)>>40),
-                    UInt8((ipv6lhs & 0x00ff000000000000)>>48),
-                    UInt8((ipv6lhs & 0xff00000000000000)>>56),
-
-                    UInt8((ipv6rhs & 0x00000000000000ff)),
-                    UInt8((ipv6rhs & 0x000000000000ff00)>>8),
-                    UInt8((ipv6rhs & 0x0000000000ff0000)>>16),
-                    UInt8((ipv6rhs & 0x00000000ff000000)>>24),
-                    UInt8((ipv6rhs & 0x000000ff00000000)>>32),
-                    UInt8((ipv6rhs & 0x0000ff0000000000)>>40),
-                    UInt8((ipv6rhs & 0x00ff000000000000)>>48),
-                    UInt8((ipv6rhs & 0xff00000000000000)>>56),
-                ]
-            }
+                UInt8((ipv6rhs & 0xff00000000000000)>>56),
+                UInt8((ipv6rhs & 0x00ff000000000000)>>48),
+                UInt8((ipv6rhs & 0x0000ff0000000000)>>40),
+                UInt8((ipv6rhs & 0x000000ff00000000)>>32),
+                UInt8((ipv6rhs & 0x00000000ff000000)>>24),
+                UInt8((ipv6rhs & 0x0000000000ff0000)>>16),
+                UInt8((ipv6rhs & 0x000000000000ff00)>>8),
+                UInt8((ipv6rhs & 0x00000000000000ff)>>0)
+            ]
         }
     }
     /// Ip address Data (in network byte order)
@@ -1100,16 +978,14 @@ extension IPAddress {
     ///
     /// - Note: Out of bounds `cidr` values will be clamped to `IPAddress.validV4CIDRRange`
     /// boundaries.
-
     /// Example
     ///
     ///     IPAddress(192, 168, 5, 4) // 192.168.5.4/32
+    ///
     public init(_ a:UInt8, _ b:UInt8, _ c:UInt8, _ d:UInt8, cidr bits:Int = 32) {
         self.cidrBits = Self.validV4CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV4CIDRRange.upperBound
         self.type = .v4
-        self.sysendianIpv4 = Self.systemIsLittleEndian ?
-        UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24 :
-        UInt32(a) | UInt32(b)<<8 | UInt32(c)<<16 | UInt32(d)<<24
+        self.sysendianIpv4 = UInt32(d) | UInt32(c)<<8 | UInt32(b)<<16 | UInt32(a)<<24
         self.ipv6rhs = 0
         self.ipv6lhs = 0
     }
@@ -1118,24 +994,11 @@ extension IPAddress {
     /// Example
     ///
     ///     IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1) // 2001:db8::1/128
+    ///
     public init(_ a:UInt16, _ b:UInt16, _ c:UInt16, _ d:UInt16, _ e:UInt16, _ f:UInt16, _ g:UInt16, _ h:UInt16, cidr bits:Int = 128) {
         self.cidrBits = Self.validV6CIDRRange.contains(bits) ? bits : bits < 0 ? 0 : Self.validV6CIDRRange.upperBound
-        if Self.systemIsLittleEndian {
-            self.ipv6rhs =
-            UInt64(h) | UInt64(g)<<16 |
-            UInt64(f)<<32 | UInt64(e)<<48
-            self.ipv6lhs =
-            UInt64(d) | UInt64(c)<<16 |
-            UInt64(b)<<32 | UInt64(a)<<48
-        }
-        else {
-            self.ipv6rhs =
-            UInt64(a.byteSwapped) | UInt64(b.byteSwapped)<<16 |
-            UInt64(c.byteSwapped)<<32 | UInt64(d.byteSwapped)<<48
-            self.ipv6lhs =
-            UInt64(e.byteSwapped) | UInt64(f.byteSwapped)<<16 |
-            UInt64(g.byteSwapped)<<32 | UInt64(h.byteSwapped)<<48
-        }
+        self.ipv6rhs = UInt64(h) | UInt64(g)<<16 | UInt64(f)<<32 | UInt64(e)<<48
+        self.ipv6lhs = UInt64(d) | UInt64(c)<<16 | UInt64(b)<<32 | UInt64(a)<<48
         self.sysendianIpv4 = 0
         self.type = .v6
     }
@@ -1166,18 +1029,41 @@ extension IPAddress {
             self.init(other.ipv6lhs, other.ipv6rhs, cidr: bits ?? Self.validV6CIDRRange.upperBound)
         }
     }
-    /// A boolean value indicating whether current system is little endian
-    private static var systemIsLittleEndian:Bool {
-        UInt16(256) & 0x00ff == 0
-    }
 }
 // MARK: -
 extension IPAddress : Strideable {
     public typealias Stride = Int
     public func distance(to other: IPAddress) -> Int {
         precondition(type == other.type, "\(#function) requires ip address types to be equal, got \(type) and \(other.type)")
-        precondition(type == .v4, "\(#function) not available for \(IPAddress.IPAddrType.v6) ip addresses")
-        return Int(other.sysendianIpv4) - Int(sysendianIpv4)
+        if type == .v4 {
+            // Fits in Int (64-bit) for all v4 values; magnitude < 2^32.
+            return Int(other.sysendianIpv4) - Int(sysendianIpv4)
+        }
+        // v6: compute the signed 128-bit difference (other - self) and narrow it
+        // to Stride (Int). A distance larger than Int can hold cannot be
+        // represented, so trap — matching the standard library's integer
+        // Strideable conformances.
+        let ascending = ipv6lhs < other.ipv6lhs
+            || (ipv6lhs == other.ipv6lhs && ipv6rhs <= other.ipv6rhs)
+        // Subtract smaller from larger to get an unsigned 128-bit magnitude.
+        let (aHi, aLo, bHi, bLo) = ascending
+            ? (other.ipv6lhs, other.ipv6rhs, ipv6lhs, ipv6rhs)
+            : (ipv6lhs, ipv6rhs, other.ipv6lhs, other.ipv6rhs)
+        let (lo, borrow) = aLo.subtractingReportingOverflow(bLo)
+        let hi = aHi - bHi - (borrow ? 1 : 0)
+        precondition(hi == 0, "\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+        if ascending {
+            guard let d = Int(exactly: lo) else {
+                preconditionFailure("\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+            }
+            return d
+        }
+        // Negative distance; magnitude `lo` may legitimately equal Int.min's magnitude (2^63).
+        if lo == UInt64(Int.max) + 1 { return Int.min }
+        guard let m = Int(exactly: lo) else {
+            preconditionFailure("\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+        }
+        return -m
     }
     public func advanced(by n: Int) -> IPAddress {
         if type == .v4 {
