@@ -1,6 +1,5 @@
 import XCTest
 @testable import IPAddress
-import Table
 
 final class IPAddressTests: XCTestCase {
     func test_IPAddress_init() {
@@ -1596,64 +1595,27 @@ final class PerformanceTests : XCTestCase {
         averages.append(runit(perf_ipv6_description(iterations:)))
         averages.append(runit(perf_ipv6_compactDescription(iterations:)))
 
-        var cells:[[Txt]] = []
-        let cols = [
-            Col("IPAddress API", defaultAlignment: .bottomLeft),
-            Col("Measured performance invocations / sec", width: 20,
-                defaultAlignment: .bottomCenter),
-            Col("Test data type", width: 6,
-                defaultAlignment: .bottomCenter, defaultWrapping: .word),
-            Col("Comment", width: 24,
-                defaultAlignment: .bottomCenter, defaultWrapping: .word),
-        ]
-        
+        // Build the performance table (no external `Table` dependency) and
+        // write it to the git-ignored `performance/` folder, one file per
+        // measured system configuration and build mode.
+        let columns = PerfTable.ipAddressColumns()
+        var rows:[[String]] = []
+        var jsonResults:[PerfResultJSON] = []
         averages.forEach { (api, addrType, comment, time, invCount) in
-            let r = rate(time, iterations: invCount)
-            cells.append([Txt(api),
-                          Txt(r, alignment: .bottomRight),
-                          Txt(addrType, alignment: .bottomCenter),
-                          Txt(comment, alignment: .topLeft)])
+            let formatted = rate(time, iterations: invCount)
+            let perSec = Double(invCount) / (time / 1_000_000_000)
+            rows.append([api, formatted, addrType, comment])
+            jsonResults.append(
+                PerfResultJSON(api: api, dataType: addrType, comment: comment,
+                               invocations: invCount, averageNanoseconds: time,
+                               invocationsPerSecond: perSec,
+                               invocationsPerSecondFormatted: formatted))
         }
-        let tbl = Tbl("Performance test summary for\n\(hwspec())",
-                      columns: cols,
-                      cells: cells)
-        var out = "```\n"
-        out += tbl.render(style: .roundedPadded)
-        out += "```\n"
-        var outfile:URL {
-            var root = URL(fileURLWithPath: #file.replacingOccurrences(of: "IPAddress.swift", with: ""))
-            root.appendPathComponent("../../../README.md")
-            return root.standardized
-        }
-        do {
-            let readme =
-            """
-            [![Tests](https://github.com/gallinapassus/IPAddress/actions/workflows/ipaddress-ci.yml/badge.svg)](https://github.com/gallinapassus/IPAddress/actions/workflows/ipaddress-ci.yml)
-            
-            # IPAddress
-            
-            A concrete type capable of encapsulating both ipv4 and ipv6 addresses.
-            
-            # IPAddressIterator
-            
-            An iterator over the elements of type `IPAddress`.
-            
-            # IPAddressSequence
-            
-            A type providing sequential, iterated access to `IPAddress` elements.
-            
-            # IPAddressAndPort
-            
-            A concrete type for storing IPAddress, port and (transport layer) ip-protocol (tcp or udp).
-
-            # Reference performance
-            
-            """
-            try (readme + out).write(to: outfile, atomically: true, encoding: .utf8)
-        } catch let e {
-            dump(e)
-        }
-        XCTAssertTrue(out.count > 0)
+        let system = hwspec()
+        let table = PerfTable.render(title: "Performance test summary for\n\(system)",
+                                     columns: columns, rows: rows)
+        PerfReport.write(table: table, system: system, results: jsonResults)
+        XCTAssertTrue(table.count > 0)
     }
 }
 let ipv4ParsingZoo:[(in:String, value:IPAddress?, out:String?)] = [

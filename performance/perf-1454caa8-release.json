@@ -1,0 +1,180 @@
+{
+  "build" : "release",
+  "generated" : "2026-06-13",
+  "results" : [
+    {
+      "api" : ".init(_:_:_:_:cidr:)",
+      "averageNanoseconds" : 19627203.399999999,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv4",
+      "invocations" : 655350,
+      "invocationsPerSecond" : 33389881.718961556,
+      "invocationsPerSecondFormatted" : "33 389 882"
+    },
+    {
+      "api" : ".init(_:cidr:)",
+      "averageNanoseconds" : 19934476.199999999,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv4",
+      "invocations" : 655350,
+      "invocationsPerSecond" : 32875205.419242471,
+      "invocationsPerSecondFormatted" : "32 875 205"
+    },
+    {
+      "api" : ".init(_:_:_:_:_:_:_:_:cidr:)",
+      "averageNanoseconds" : 8020976.5999999996,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv6",
+      "invocations" : 196605,
+      "invocationsPerSecond" : 24511354.390436694,
+      "invocationsPerSecondFormatted" : "24 511 354"
+    },
+    {
+      "api" : ".init?(bytes:cidr:)",
+      "averageNanoseconds" : 36881257,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv4",
+      "invocations" : 655350,
+      "invocationsPerSecond" : 17769188.289867669,
+      "invocationsPerSecondFormatted" : "17 769 188"
+    },
+    {
+      "api" : ".init?(bytes:cidr:)",
+      "averageNanoseconds" : 15343428.4,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv6",
+      "invocations" : 262140,
+      "invocationsPerSecond" : 17084838.744383883,
+      "invocationsPerSecondFormatted" : "17 084 839"
+    },
+    {
+      "api" : ".init?(data:cidr:)",
+      "averageNanoseconds" : 114117316.8,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv4",
+      "invocations" : 655350,
+      "invocationsPerSecond" : 5742774.351666145,
+      "invocationsPerSecondFormatted" : "5 742 774"
+    },
+    {
+      "api" : ".init?(data:cidr:)",
+      "averageNanoseconds" : 47207211.399999999,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv6",
+      "invocations" : 196605,
+      "invocationsPerSecond" : 4164723.8667438002,
+      "invocationsPerSecondFormatted" : "4 164 724"
+    },
+    {
+      "api" : ".init?(_:)",
+      "averageNanoseconds" : 78148816.200000003,
+      "comment" : "Mix of strings resulting failure / success",
+      "dataType" : "ipv4 & ipv6",
+      "invocations" : 65535,
+      "invocationsPerSecond" : 838592.3573337507,
+      "invocationsPerSecondFormatted" : "838 592"
+    },
+    {
+      "api" : ".init?(_:)",
+      "averageNanoseconds" : 301980622.60000002,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv6",
+      "invocations" : 65535,
+      "invocationsPerSecond" : 217017.23586021905,
+      "invocationsPerSecondFormatted" : "217 017"
+    },
+    {
+      "api" : ".init?(_:)",
+      "averageNanoseconds" : 115422871.40000001,
+      "comment" : "Randomized valid addresses",
+      "dataType" : "ipv4",
+      "invocations" : 65535,
+      "invocationsPerSecond" : 567781.75074927136,
+      "invocationsPerSecondFormatted" : "567 782"
+    },
+    {
+      "api" : ".contains(other:)",
+      "averageNanoseconds" : 37485686,
+      "comment" : "Randomized addresses true 44.0%, false 56.0%",
+      "dataType" : "ipv4",
+      "invocations" : 32765,
+      "invocationsPerSecond" : 874066.97052309522,
+      "invocationsPerSecondFormatted" : "874 067"
+    },
+    {
+      "api" : ".contains(other:)",
+      "averageNanoseconds" : 64819797.600000001,
+      "comment" : "Randomized addresses true 54.0%, false 46.0%",
+      "dataType" : "ipv6",
+      "invocations" : 32765,
+      "invocationsPerSecond" : 505478.28307319485,
+      "invocationsPerSecondFormatted" : "505 478"
+    },
+    {
+      "api" : ".advanced(by:clamped:)",
+      "averageNanoseconds" : 17482477.800000001,
+      "comment" : "Randomized addresses, not clamped",
+      "dataType" : "ipv4",
+      "invocations" : 655355,
+      "invocationsPerSecond" : 37486391.088109948,
+      "invocationsPerSecondFormatted" : "37 486 391"
+    },
+    {
+      "api" : ".advanced(by:clamped:)",
+      "averageNanoseconds" : 17278872.600000001,
+      "comment" : "Randomized addresses, not clamped",
+      "dataType" : "ipv6",
+      "invocations" : 655355,
+      "invocationsPerSecond" : 37928111.119934984,
+      "invocationsPerSecondFormatted" : "37 928 111"
+    },
+    {
+      "api" : ".next()",
+      "averageNanoseconds" : 275320094.80000001,
+      "comment" : "Randomized addresses, clamped",
+      "dataType" : "ipv4",
+      "invocations" : 20971520,
+      "invocationsPerSecond" : 76171410.645613357,
+      "invocationsPerSecondFormatted" : "76 171 411"
+    },
+    {
+      "api" : ".next()",
+      "averageNanoseconds" : 537934372.60000002,
+      "comment" : "Randomized addresses, clamped",
+      "dataType" : "ipv6",
+      "invocations" : 41943040,
+      "invocationsPerSecond" : 77970552.053174376,
+      "invocationsPerSecondFormatted" : "77 970 552"
+    },
+    {
+      "api" : ".description",
+      "averageNanoseconds" : 134041406.59999999,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv4",
+      "invocations" : 327675,
+      "invocationsPerSecond" : 2444580.4345953502,
+      "invocationsPerSecondFormatted" : "2 444 580"
+    },
+    {
+      "api" : ".description",
+      "averageNanoseconds" : 411615361.39999998,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv6",
+      "invocations" : 327675,
+      "invocationsPerSecond" : 796070.87278157158,
+      "invocationsPerSecondFormatted" : "796 071"
+    },
+    {
+      "api" : ".compactDescription",
+      "averageNanoseconds" : 490893456.19999999,
+      "comment" : "Randomized addresses",
+      "dataType" : "ipv6",
+      "invocations" : 327675,
+      "invocationsPerSecond" : 667507.37020722998,
+      "invocationsPerSecondFormatted" : "667 507"
+    }
+  ],
+  "swift" : "5.7",
+  "system" : "Intel(R) Core(TM) i7-6920HQ CPU @ 2.90GHz, 8 processors, 16.0 GiB of memory\nOperating system Version 12.7.6 (Build 21H1320)",
+  "systemHash" : "1454caa8"
+}
