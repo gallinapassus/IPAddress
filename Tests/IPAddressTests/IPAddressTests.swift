@@ -245,8 +245,11 @@ final class IPAddressTests: XCTestCase {
         do { // v6
             XCTAssertTrue(IPAddress(1, 0, cidr: 16).isGlobal)
             XCTAssertTrue(IPAddress(0, 2, cidr: 16).isGlobal)
+            XCTAssertTrue(IPAddress(0xfbffffffffffffff, 0).isGlobal)
+            XCTAssertFalse(IPAddress(0xfc00000000000000, 0).isGlobal)
             XCTAssertFalse(IPAddress(0xfd00000000000000, 0).isGlobal)
-            XCTAssertFalse(IPAddress(0xfe80000000000000, 0).isGlobal)
+            XCTAssertFalse(IPAddress(0xfdffffffffffffff, 0).isGlobal)
+            XCTAssertTrue(IPAddress(0xff00000000000000, 0).isGlobal)
             XCTAssertFalse(IPAddress(~0, ~0).isGlobal)
             XCTAssertFalse(IPAddress(0, 0).isGlobal)
         }
@@ -272,10 +275,10 @@ final class IPAddressTests: XCTestCase {
             XCTAssertFalse(IPAddress(11, 0, 0, 0).isPrivate)
         }
         do { // v6
-            XCTAssertTrue (IPAddress(0xfd00000000000000, 0, cidr: 8).isPrivate)
-            XCTAssertTrue (IPAddress(0xfd00000000000000, 0).isPrivate)
+            XCTAssertTrue (IPAddress(0xfc00000000000000, 0, cidr: 8).isPrivate)
+            XCTAssertTrue (IPAddress(0xfc00000000000000, 0).isPrivate)
             XCTAssertTrue (IPAddress(0xfdffffffffffffff, 0).isPrivate)
-            XCTAssertFalse(IPAddress(0xfcffffffffffffff, 0).isPrivate)
+            XCTAssertFalse(IPAddress(0xfbffffffffffffff, 0).isPrivate)
             XCTAssertFalse(IPAddress(0xfe00000000000000, 0).isPrivate)
         }
     }
