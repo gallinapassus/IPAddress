@@ -668,8 +668,19 @@ final class IPAddressTests: XCTestCase {
             XCTAssertEqual(IPAddress.ipv4unspecifiedAddress.distance(to: IPAddress.ipv4localhost), 2130706433)
         }
         do { // v6 distance(to:)
-            // Below: both of the following will cause crash 
-            // let _ = IPAddress.ipv6localhost.distance(to: IPAddress.ipv6unspecifiedAddress)
+            XCTAssertEqual(IPAddress.ipv6unspecifiedAddress.distance(to: IPAddress.ipv6localhost), 1)
+            XCTAssertEqual(IPAddress.ipv6localhost.distance(to: IPAddress.ipv6unspecifiedAddress), -1)
+            XCTAssertEqual(IPAddress(0, 1).distance(to: IPAddress(0, 1)), 0)
+            // Crossing the lhs/rhs 64-bit word boundary in both directions.
+            XCTAssertEqual(IPAddress(0, UInt64.max).distance(to: IPAddress(1, 0)), 1)
+            XCTAssertEqual(IPAddress(1, 0).distance(to: IPAddress(0, UInt64.max)), -1)
+            // Round-trip contract: a.advanced(by: a.distance(to: b)) == b
+            let a = IPAddress(0x20010db800000000, 0x0000000000000100)
+            let b = IPAddress(0x20010db800000000, 0x00000000000000f0)
+            XCTAssertEqual(a.distance(to: b), -16)
+            XCTAssertEqual(a.advanced(by: a.distance(to: b)), b)
+            XCTAssertEqual(b.advanced(by: b.distance(to: a)), a)
+            // Below still crashes: type mismatch precondition.
             // let _ = IPAddress.ipv4localhost.distance(to: IPAddress.ipv6unspecifiedAddress)
         }
         do { // v4 advanced(by:)

@@ -1035,8 +1035,35 @@ extension IPAddress : Strideable {
     public typealias Stride = Int
     public func distance(to other: IPAddress) -> Int {
         precondition(type == other.type, "\(#function) requires ip address types to be equal, got \(type) and \(other.type)")
-        precondition(type == .v4, "\(#function) not available for \(IPAddress.IPAddrType.v6) ip addresses")
-        return Int(other.sysendianIpv4) - Int(sysendianIpv4)
+        if type == .v4 {
+            // Fits in Int (64-bit) for all v4 values; magnitude < 2^32.
+            return Int(other.sysendianIpv4) - Int(sysendianIpv4)
+        }
+        // v6: compute the signed 128-bit difference (other - self) and narrow it
+        // to Stride (Int). A distance larger than Int can hold cannot be
+        // represented, so trap — matching the standard library's integer
+        // Strideable conformances.
+        let ascending = ipv6lhs < other.ipv6lhs
+            || (ipv6lhs == other.ipv6lhs && ipv6rhs <= other.ipv6rhs)
+        // Subtract smaller from larger to get an unsigned 128-bit magnitude.
+        let (aHi, aLo, bHi, bLo) = ascending
+            ? (other.ipv6lhs, other.ipv6rhs, ipv6lhs, ipv6rhs)
+            : (ipv6lhs, ipv6rhs, other.ipv6lhs, other.ipv6rhs)
+        let (lo, borrow) = aLo.subtractingReportingOverflow(bLo)
+        let hi = aHi - bHi - (borrow ? 1 : 0)
+        precondition(hi == 0, "\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+        if ascending {
+            guard let d = Int(exactly: lo) else {
+                preconditionFailure("\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+            }
+            return d
+        }
+        // Negative distance; magnitude `lo` may legitimately equal Int.min's magnitude (2^63).
+        if lo == UInt64(Int.max) + 1 { return Int.min }
+        guard let m = Int(exactly: lo) else {
+            preconditionFailure("\(#function) distance between \(self) and \(other) overflows Stride (Int)")
+        }
+        return -m
     }
     public func advanced(by n: Int) -> IPAddress {
         if type == .v4 {
