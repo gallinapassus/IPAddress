@@ -974,6 +974,101 @@ final class IPAddressTests: XCTestCase {
             XCTFail(str)
         }
     }
+
+    func test_ipv4_bytes_init_endianness() {
+        // Test that bytes are interpreted correctly as network byte order (big-endian)
+        let ip1 = IPAddress(bytes: [192, 168, 1, 1])
+        XCTAssertEqual(ip1?.description, "192.168.1.1")
+
+        // Verify the internal representation matches
+        let ip2 = IPAddress(192, 168, 1, 1)
+        XCTAssertEqual(ip1, ip2)
+
+        // Check raw bytes match the input
+        XCTAssertEqual(ip1?.rawAddressData, Data([192, 168, 1, 1]))
+    }
+
+    func test_ipv6_bytes_init_and_roundtrip() {
+        // Test IPv6 bytes initialization
+        let ip1 = IPAddress(bytes: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+        // description does NOT compress zeros (as per doc comment at line 274)
+        XCTAssertEqual(ip1?.description, "2001:db8:0:0:0:0:0:1")
+        // compactDescription SHOULD compress zeros
+        XCTAssertEqual(ip1?.compactDescription, "2001:db8::1")
+
+        let ip2 = IPAddress(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+        XCTAssertEqual(ip1, ip2)
+
+        // Test roundtrip: bytes -> IP -> networkOrderedAddressBytes -> IP
+        let original = IPAddress(0x2001, 0xdb8, 1, 2, 3, 4, 5, 6)
+        let bytes = original.networkOrderedAddressBytes
+        let restored = IPAddress(bytes: bytes, cidr: original.cidrBits)
+        XCTAssertEqual(restored, original)
+
+        // Verify compactDescription matches
+        XCTAssertEqual(restored?.compactDescription, original.compactDescription)
+    }
+
+    func test_ipv4_broadcast_address_on_zero_network() {
+        // /0 network - all addresses
+        let ip = IPAddress(0, 0, 0, 0, cidr: 0)
+        XCTAssertEqual(ip.broadcastAddress?.description, "255.255.255.255")
+        XCTAssertEqual(ip.broadcastAddress?.cidrBits, 0)
+    }
+
+    func test_ipv6_router_address_with_ffff_boundary() {
+        // Test router address with FF boundaries
+        let ip = IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 127)
+        let router = ip.routerAddress
+        XCTAssertNotNil(router)
+    }
+
+    func test_ipv6_broadcast_address_with_ffff() {
+        let ip = IPAddress(0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xfffe, cidr: 127)
+        let broadcast = ip.broadcastAddress
+        XCTAssertNotNil(broadcast)
+    }
+
+    func test_ipv4_advanced_negative_offset_edge_cases() {
+        // Test advanced with negative offset
+        let ip = IPAddress(10, 0, 0, 5)
+        XCTAssertEqual(ip.advanced(by: -3)?.description, "10.0.0.2")
+
+        // Edge case: advancing past zero should return nil
+        let atZero = IPAddress(0, 0, 0, 1)
+        XCTAssertNil(atZero.advanced(by: -2))
+
+        // Advance exactly to zero
+        XCTAssertEqual(ip.advanced(by: -5)?.description, "10.0.0.0")
+    }
+
+    func test_parser_trailing_slash() {
+        // Trailing slash without CIDR should fail
+        XCTAssertNil(IPAddress("192.168.1.0/"))
+    }
+
+    func test_parser_leading_single_colon() {
+        // Leading single colon (not double) should fail
+        XCTAssertNil(IPAddress(":1:2:3:4:5:6:7"))
+    }
+
+    func test_parser_double_colon_with_too_many_segments() {
+        // :: with too many segments after expansion
+        XCTAssertNil(IPAddress("::1:2:3:4:5:6:7"))
+    }
+
+    func test_ipv6_underestimated_host_count_large_network() {
+        // Test with small CIDR (large network)
+        let ip = IPAddress("::/10")
+        XCTAssertGreaterThan(ip?.underestimatedHostCount ?? 0, 0)
+    }
+
+    func test_raw_address_data_roundtrip() {
+        let ip1 = IPAddress(1, 2, 3, 4)
+        let data = ip1.rawAddressData
+        let ip2 = IPAddress(data: data, cidr: 32)
+        XCTAssertEqual(ip1, ip2)
+    }
 }
 
 extension Array {
